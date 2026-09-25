@@ -1446,7 +1446,12 @@
     });
   }
 
-  document.addEventListener('introended', () => { if(video.muted) tryUnmuted(); }, {once:true});
+  document.addEventListener('introended', () => {
+    if(video.muted){
+      video.currentTime = 0;
+      tryUnmuted();
+    }
+  }, {once:true});
 })();
 </script>
 <script src="https://unpkg.com/three-spritetext@1.6.5/dist/three-spritetext.min.js"></script>
