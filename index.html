@@ -243,8 +243,8 @@
     z-index:0;
     pointer-events:none;
     background:linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.42) 55%, rgba(255,255,255,.5) 100%);
-    backdrop-filter:blur(14px) saturate(1.4);
-    -webkit-backdrop-filter:blur(14px) saturate(1.4);
+    backdrop-filter:blur(22px) saturate(1.1);
+    -webkit-backdrop-filter:blur(22px) saturate(1.1);
   }
   @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
     /* No backdrop-filter support — fall back to a heavier flat wash so
@@ -1481,6 +1481,15 @@
       const reveal = ()=>{
         clearTimeout(stuckTimer);
         lbFrame.classList.add('has-image');
+        // Only relax the frame back to its own natural (CSS aspect-ratio /
+        // object-fit) sizing once the real element has confirmed its
+        // dimensions — clearing this any earlier (e.g. right when the morph
+        // tween finishes) leaves a gap where the frame has no inline size
+        // and no sized child yet, so it collapses and then visibly snaps
+        // back once this element loads. Harmless no-op when these were
+        // never set (the plain cross-dissolve path).
+        lbFrame.style.width = '';
+        lbFrame.style.height = '';
         requestAnimationFrame(()=>el.classList.remove('lb-morphing'));
       };
       if(el.complete && el.naturalWidth) reveal();
@@ -1521,8 +1530,12 @@
           setTimeout(insertNew, 260);
           return;
         }
-        lbFrame.style.width = '';
-        lbFrame.style.height = '';
+        // Deliberately NOT clearing lbFrame's inline width/height here —
+        // that used to hand off from the tween's correct, settled size to
+        // insertNew()'s fresh <img> before that <img> had any dimensions
+        // of its own, causing the frame to collapse and then snap back
+        // once it loaded. reveal() (inside insertNew, once the new
+        // element actually has known dimensions) does the clearing now.
         insertNew();
       });
       return;
