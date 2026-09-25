@@ -1867,6 +1867,7 @@ class LightboxMorph {
     const applySize = () => {
       this.container.style.width = size.w + 'px';
       this.container.style.height = size.h + 'px';
+      this.resize();
     };
 
     await new Promise(resolve => {
