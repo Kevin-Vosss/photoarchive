@@ -1490,7 +1490,21 @@
         // never set (the plain cross-dissolve path).
         lbFrame.style.width = '';
         lbFrame.style.height = '';
-        requestAnimationFrame(()=>el.classList.remove('lb-morphing'));
+        // Single rAF isn't a safe bet here: the morph engine has usually
+        // already decoded this exact src as a WebGL texture, so the browser
+        // serves it from cache and el.complete is often true SYNCHRONOUSLY,
+        // right in the same tick as the insertBefore() above — meaning
+        // 'lb-morphing' gets added and this removal both get scheduled
+        // before the element has ever been painted once. With no committed
+        // frame showing the scale(1.06)/blur "before" state in between, the
+        // browser collapses both style changes into a single recalc and the
+        // transition never runs — it just snaps straight to the resting
+        // size. Nesting the rAF forces a real painted frame with the
+        // 'lb-morphing' state first, so the transition always has
+        // something to animate from.
+        requestAnimationFrame(()=>{
+          requestAnimationFrame(()=>el.classList.remove('lb-morphing'));
+        });
       };
       if(el.complete && el.naturalWidth) reveal();
       el.addEventListener('load', reveal);
