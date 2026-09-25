@@ -732,16 +732,13 @@
         letterbox bars whenever a photo's real ratio didn't match the box.
      2) No size of its own at all (shrink-wrap to the photo) — killed the
         letterboxing, but meant the box's own footprint changed with every
-        photo. The morph engine below even leans on this by tweening
-        .lb-frame's own width/height as part of its transition effect.
-        Fine for the photo itself, but prev/next/close sit right after it
-        in the same flow, so they physically moved on every navigation —
-        that's the "buttons keep jumping" bug.
-     Fix: keep .lb-frame's own shrink-wrap sizing (below) so the morph
-     effect still works exactly as designed, but hold it inside a new
-     outer .lb-stage with a fixed size (see .lb-stage rule). The stage's
-     footprint never changes, so the nav row anchored after it never
-     moves — only the photo/frame inside the stage resizes. */
+        photo. prev/next/close sit right after it in the same flow, so
+        they physically moved on every navigation — that's the "buttons
+        keep jumping" bug.
+     Fix: keep .lb-frame's own shrink-wrap sizing (below), but hold it
+     inside a new outer .lb-stage with a fixed size (see .lb-stage rule).
+     The stage's footprint never changes, so the nav row anchored after
+     it never moves — only the photo/frame inside the stage resizes. */
   .lb-frame{
     position:relative;
     display:inline-flex;
@@ -784,16 +781,6 @@
     opacity:0;
     filter:blur(20px) saturate(1.15);
     transform:scale(1.06);
-  }
-  /* Canvas used only while the WebGL morph (image→image) is running; the
-     real <img> is hidden and this takes over, then it's removed again. */
-  .lb-morph-canvas{
-    position:absolute;
-    inset:0;
-    display:block;
-    width:100%;
-    height:100%;
-    z-index:1;
   }
   /* "add this photo" text should only ever appear once a media item has
      genuinely failed to load (.lb-missing, set by the error handler
@@ -1380,45 +1367,15 @@
   const lbCap = document.getElementById('lbCap');
   const lbCount = document.getElementById('lbCount');
 
-  // WebGL morph engine (ogl + gsap, defined in the module script below) —
-  // created lazily on first use so a WebGL context isn't spun up until
-  // someone actually opens the lightbox. `morphEngine` stays `undefined`
-  // until the first attempt, then is either the instance or `false`.
-  let morphEngine;
-  function getMorphEngine(){
-    if(morphEngine === undefined){
-      try{
-        morphEngine = (typeof window.__LightboxMorph === 'function')
-          ? new window.__LightboxMorph(lbFrame, {
-              transition:'melt', intensity:0.55, scale:2.4, aberration:0.35, drift:0.4, overlayColor:'#05060a'
-            })
-          : false;
-      } catch(e){ morphEngine = false; }
-    }
-    return morphEngine || null;
-  }
-
-  // Same "contain" math the CSS uses (max-width:min(560px,90vw), max-height:
-  // 70vh, never upscale) so the animated resize lands exactly where a plain
-  // <img> would have settled on its own.
-  function fitBox(natW, natH){
-    const maxW = Math.min(560, window.innerWidth * 0.9);
-    const maxH = window.innerHeight * 0.70;
-    const scale = Math.min(1, maxW / natW, maxH / natH);
-    return { w: natW * scale, h: natH * scale };
-  }
-
   let morphBusy = false;
   let lbLoadToken = 0;
 
   function renderLB(){
-    // Guards BOTH transition paths below. Previously only the WebGL path
-    // set morphBusy, so spamming next/prev during the plain (video)
-    // cross-dissolve could fire this function again before its
-    // setTimeout-deferred insertNew had run — each call captured its own
+    // Guards against spamming next/prev mid-transition — without this, a
+    // second renderLB() could fire before the setTimeout-deferred
+    // insertNew() from the first call had run; each call captured its own
     // stale `old` reference and inserted another element without ever
-    // removing the others, which is what left multiple photos stacked on
-    // screen. Blocking re-entry here for both paths fixes that.
+    // removing the others, leaving multiple photos stacked on screen.
     if(morphBusy) return;
 
     const item = photoItems[lbIndex];
@@ -1483,25 +1440,23 @@
         lbFrame.classList.add('has-image');
         // Only relax the frame back to its own natural (CSS aspect-ratio /
         // object-fit) sizing once the real element has confirmed its
-        // dimensions — clearing this any earlier (e.g. right when the morph
-        // tween finishes) leaves a gap where the frame has no inline size
-        // and no sized child yet, so it collapses and then visibly snaps
-        // back once this element loads. Harmless no-op when these were
-        // never set (the plain cross-dissolve path).
+        // dimensions — clearing this any earlier leaves a gap where the
+        // frame has no inline size and no sized child yet, so it collapses
+        // and then visibly snaps back once this element loads. Harmless
+        // no-op when these were never set.
         lbFrame.style.width = '';
         lbFrame.style.height = '';
-        // Single rAF isn't a safe bet here: the morph engine has usually
-        // already decoded this exact src as a WebGL texture, so the browser
-        // serves it from cache and el.complete is often true SYNCHRONOUSLY,
-        // right in the same tick as the insertBefore() above — meaning
-        // 'lb-morphing' gets added and this removal both get scheduled
-        // before the element has ever been painted once. With no committed
-        // frame showing the scale(1.06)/blur "before" state in between, the
-        // browser collapses both style changes into a single recalc and the
-        // transition never runs — it just snaps straight to the resting
-        // size. Nesting the rAF forces a real painted frame with the
-        // 'lb-morphing' state first, so the transition always has
-        // something to animate from.
+        // Single rAF isn't a safe bet here: if this exact src is already in
+        // the browser's cache (e.g. stepping back to a photo seen earlier
+        // this session), el.complete is often true SYNCHRONOUSLY, right in
+        // the same tick as the insertBefore() above — meaning 'lb-morphing'
+        // gets added and this removal both get scheduled before the element
+        // has ever been painted once. With no committed frame showing the
+        // scale(1.06)/blur "before" state in between, the browser collapses
+        // both style changes into a single recalc and the transition never
+        // runs — it just snaps straight to the resting size. Nesting the
+        // rAF forces a real painted frame with the 'lb-morphing' state
+        // first, so the transition always has something to animate from.
         requestAnimationFrame(()=>{
           requestAnimationFrame(()=>el.classList.remove('lb-morphing'));
         });
@@ -1518,46 +1473,10 @@
       morphBusy = false;
     };
 
-    // WebGL morph only between two different still images, and only once
-    // something is already showing (nothing to morph from on first open).
-    // Video stays on the plain blur cross-dissolve below.
-    const engine = getMorphEngine();
-    const canMorph = engine && old && old.tagName === 'IMG'
-      && !isVideoSrc(mediaItem.src) && old.getAttribute('src') !== mediaItem.src;
-
     morphBusy = true;
 
-    if(canMorph){
-      const fromSrc = old.getAttribute('src');
-      const rect = old.getBoundingClientRect();
-      lbFrame.style.width = rect.width + 'px';
-      lbFrame.style.height = rect.height + 'px';
-      old.style.opacity = '0';
-      old.style.position = 'absolute';
-
-      engine.run({ fromSrc, toSrc: mediaItem.src, fitBox, duration: 1.1 }).then(ok=>{
-        if(!ok){
-          // texture failed to load — fall back to the plain cross-dissolve
-          old.style.opacity = '';
-          old.style.position = '';
-          old.classList.add('lb-morphing');
-          setTimeout(insertNew, 260);
-          return;
-        }
-        // Deliberately NOT clearing lbFrame's inline width/height here —
-        // that used to hand off from the tween's correct, settled size to
-        // insertNew()'s fresh <img> before that <img> had any dimensions
-        // of its own, causing the frame to collapse and then snap back
-        // once it loaded. reveal() (inside insertNew, once the new
-        // element actually has known dimensions) does the clearing now.
-        insertNew();
-      });
-      return;
-    }
-
-    // Fallback: dissolve the outgoing photo through a soft blur before
-    // swapping in the next one (used for videos, first open, and if the
-    // WebGL engine isn't available).
+    // Dissolve the outgoing photo/video through a soft blur before
+    // swapping in the next one.
     if(old){
       old.classList.add('lb-morphing');
       setTimeout(insertNew, 260);
@@ -1576,358 +1495,6 @@
   function lbBackdrop(event){if(event.target.id==='lightbox')closeLB()}
 
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeLB()});
-</script>
-<script type="module">
-// ---------- WebGL morph transition for the lightbox ----------
-// Ported from React Bits' MorphSlider (ogl + gsap), adapted for a
-// single-photo viewer instead of a fixed-box carousel:
-//  - "contain"-fit per image (never crops), not "cover"-fit
-//  - the frame's own box is tweened to the incoming photo's size on the
-//    SAME timeline as the shader progress, instead of letting a separate
-//    CSS aspect-ratio transition fight the opacity/blur cross-dissolve —
-//    that fight (size changing on one clock, color changing on another)
-//    was the actual source of the old jitter/instability, not the shader.
-//  - only used image→image; video stays on the old blur cross-dissolve,
-//    since morphing live video frames through a shader is a different,
-//    much heavier problem than this needed to solve.
-// Loaded as a module so it can import straight from esm CDNs — the rest
-// of the page's scripts are untouched classic scripts.
-import { Renderer, Triangle, Program, Mesh, Texture } from 'https://cdn.jsdelivr.net/npm/ogl@1/+esm';
-import { gsap } from 'https://cdn.jsdelivr.net/npm/gsap@3/+esm';
-
-const TRANSITIONS = { melt: 0, ripple: 1, shear: 2, swirl: 3 };
-
-const vertexShader = `
-attribute vec2 position;
-attribute vec2 uv;
-varying vec2 vUv;
-void main() {
-  vUv = uv;
-  gl_Position = vec4(position, 0.0, 1.0);
-}
-`;
-
-const fragmentShader = `
-precision highp float;
-
-uniform sampler2D tCurrent;
-uniform sampler2D tNext;
-uniform vec2 uResolution;
-uniform vec2 uCurrentSize;
-uniform vec2 uNextSize;
-uniform float uProgress;
-uniform int uMode;
-uniform float uIntensity;
-uniform float uScale;
-uniform float uAberration;
-uniform float uDrift;
-uniform float uTime;
-uniform float uReduce;
-uniform vec2 uPointer;
-uniform vec3 uOverlay;
-
-varying vec2 vUv;
-
-const float PI = 3.14159265359;
-
-float hash11(float p) {
-  p = fract(p * 0.1031);
-  p *= p + 33.33;
-  p *= p + p;
-  return fract(p);
-}
-
-float hash21(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
-
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  float a = hash21(i);
-  float b = hash21(i + vec2(1.0, 0.0));
-  float c = hash21(i + vec2(0.0, 1.0));
-  float d = hash21(i + vec2(1.0, 1.0));
-  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-
-float fbm(vec2 p) {
-  float v = 0.0;
-  float a = 0.5;
-  for (int i = 0; i < 5; i++) {
-    v += a * noise(p);
-    p *= 2.0;
-    a *= 0.5;
-  }
-  return v;
-}
-
-mat2 rot(float a) {
-  float s = sin(a);
-  float c = cos(a);
-  return mat2(c, -s, s, c);
-}
-
-// "Cover" fit: sample coordinates so the frame is filled edge-to-edge,
-// cropping whichever axis overflows — this is what the reference
-// MorphSlider uses, and what makes the melt read as one continuous liquid
-// surface instead of a letterboxed image floating in empty space.
-vec2 coverUV(vec2 uv, vec2 res, vec2 img) {
-  float rA = res.x / max(res.y, 1.0);
-  float iA = img.x / max(img.y, 1.0);
-  vec2 s = vec2(1.0);
-  float ratio = rA / max(iA, 0.0001);
-  if (ratio > 1.0) {
-    s.y = 1.0 / ratio;
-  } else {
-    s.x = ratio;
-  }
-  return (uv - 0.5) * s + 0.5;
-}
-
-void main() {
-  float p = clamp(uProgress, 0.0, 1.0);
-  float env = sin(p * PI);
-
-  vec2 uv = vUv;
-
-  uv += vec2(sin(uTime * 0.25 + uv.y * 4.0), cos(uTime * 0.22 + uv.x * 4.0)) * uDrift * 0.008;
-  uv = (uv - 0.5) * (1.0 - uDrift * 0.02 * sin(uTime * 0.4)) + 0.5;
-
-  vec2 uvC = uv;
-  vec2 uvN = uv;
-  float m = smoothstep(0.0, 1.0, p);
-
-  if (uReduce < 0.5) {
-    if (uMode == 3) {
-      vec2 c = uv - 0.5;
-      float r = length(c);
-      float ang = env * uIntensity * 3.5 * (1.0 - r);
-      uvC = rot(ang) * c + 0.5;
-      uvN = rot(-ang) * c + 0.5;
-      m = smoothstep(0.0, 1.0, p);
-    } else if (uMode == 1) {
-      float d = distance(uv, uPointer);
-      float ring = p * 1.6;
-      float wave = sin((d - ring) * 30.0) * env;
-      vec2 dir = normalize(uv - uPointer + 1e-4);
-      vec2 disp = dir * wave * uIntensity * 0.25;
-      uvC = uv + disp;
-      uvN = uv + disp * 0.6;
-      m = 1.0 - smoothstep(ring - 0.03, ring + 0.03, d);
-    } else if (uMode == 2) {
-      float slices = 14.0;
-      float row = floor(uv.y * slices);
-      float rnd = hash11(row);
-      vec2 disp = vec2((rnd - 0.5) * env * uIntensity * 0.6, 0.0);
-      uvC = uv + disp;
-      uvN = uv + disp;
-      float th = p * 1.5 - 0.25 + (rnd - 0.5) * 0.25;
-      m = 1.0 - smoothstep(th - 0.06, th + 0.06, uv.x);
-    } else {
-      // "melt": a liquid coordinate warp that peaks mid-transition (env)
-      // and relaxes back to zero at both ends, layered UNDER a plain
-      // uniform crossfade. This used to gate the reveal itself by a noise
-      // threshold (smoothstep(nn±0.15, p)) — since fbm output clusters
-      // tightly around its mean, nearly every pixel crossed its threshold
-      // within the same narrow slice of p, so the whole image flipped
-      // almost at once instead of melting. A uniform mask fixes that:
-      // every pixel fades on the exact same clock, and the warp only adds
-      // the liquid distortion on top — it no longer decides *when* a
-      // pixel reveals.
-      float nn = fbm(uv * uScale + uTime * 0.03);
-      float warp = fbm(uv * uScale * 1.7 - uTime * 0.02);
-      vec2 g = vec2(nn, warp) - 0.5;
-      uvC = uv + g * uIntensity * 0.5 * env;
-      uvN = uv - g * uIntensity * 0.5 * env;
-      m = smoothstep(0.0, 1.0, p);
-    }
-  }
-
-  vec2 sC = coverUV(uvC, uResolution, uCurrentSize);
-  vec2 sN = coverUV(uvN, uResolution, uNextSize);
-
-  float ca = uReduce < 0.5 ? uAberration * env * 0.05 : 0.0;
-
-  vec3 colC = vec3(
-    texture2D(tCurrent, sC + vec2(ca, 0.0)).r,
-    texture2D(tCurrent, sC).g,
-    texture2D(tCurrent, sC - vec2(ca, 0.0)).b
-  );
-  vec3 colN = vec3(
-    texture2D(tNext, sN + vec2(ca, 0.0)).r,
-    texture2D(tNext, sN).g,
-    texture2D(tNext, sN - vec2(ca, 0.0)).b
-  );
-
-  vec3 col = mix(colC, colN, m);
-
-  float vig = smoothstep(1.25, 0.25, length(uv - 0.5));
-  col = mix(col, uOverlay, (1.0 - vig) * 0.28);
-
-  gl_FragColor = vec4(col, 1.0);
-}
-`;
-
-function hexToRgb(hex) {
-  let h = (hex || '#000000').replace('#', '');
-  if (h.length === 3) h = h.split('').map(c => c + c).join('');
-  const n = parseInt(h, 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
-}
-
-// One shared texture cache (keyed by src) so stepping back and forth
-// between photos already viewed doesn't re-decode them.
-const textureCache = new Map();
-function loadTexture(gl, src) {
-  if (textureCache.has(src)) return textureCache.get(src);
-  const p = new Promise(resolve => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const texture = new Texture(gl, {
-        generateMipmaps: false,
-        wrapS: gl.CLAMP_TO_EDGE,
-        wrapT: gl.CLAMP_TO_EDGE
-      });
-      texture.image = img;
-      resolve({ texture, size: [img.naturalWidth || 1, img.naturalHeight || 1] });
-    };
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-  textureCache.set(src, p);
-  return p;
-}
-
-class LightboxMorph {
-  constructor(container, opts = {}) {
-    this.container = container;
-    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    this.renderer = new Renderer({
-      alpha: true,
-      antialias: true,
-      dpr: Math.min(window.devicePixelRatio || 1, 2)
-    });
-    this.gl = this.renderer.gl;
-    this.gl.clearColor(0, 0, 0, 0);
-    this.canvas = this.gl.canvas;
-    this.canvas.className = 'lb-morph-canvas';
-
-    this.geometry = new Triangle(this.gl);
-    this.program = new Program(this.gl, {
-      vertex: vertexShader,
-      fragment: fragmentShader,
-      uniforms: {
-        tCurrent: { value: null },
-        tNext: { value: null },
-        uResolution: { value: [1, 1] },
-        uCurrentSize: { value: [1, 1] },
-        uNextSize: { value: [1, 1] },
-        uProgress: { value: 0 },
-        uMode: { value: TRANSITIONS[opts.transition] ?? 0 },
-        uIntensity: { value: opts.intensity ?? 0.55 },
-        uScale: { value: opts.scale ?? 2.4 },
-        uAberration: { value: opts.aberration ?? 0.35 },
-        uDrift: { value: opts.drift ?? 0.4 },
-        uTime: { value: 0 },
-        uReduce: { value: this.reducedMotion ? 1 : 0 },
-        uPointer: { value: [0.5, 0.5] },
-        uOverlay: { value: hexToRgb(opts.overlayColor || '#17151c') }
-      }
-    });
-    this.mesh = new Mesh(this.gl, { geometry: this.geometry, program: this.program });
-
-    this.raf = null;
-    this.resizeObserver = new ResizeObserver(() => this.resize());
-    this.resizeObserver.observe(container);
-  }
-
-  resize() {
-    const rect = this.container.getBoundingClientRect();
-    const w = Math.max(rect.width, 1);
-    const h = Math.max(rect.height, 1);
-    this.renderer.setSize(w, h);
-    this.program.uniforms.uResolution.value = [this.gl.canvas.width, this.gl.canvas.height];
-  }
-
-  attach() {
-    if (this.canvas.parentNode !== this.container) {
-      this.container.insertBefore(this.canvas, this.container.firstChild);
-    }
-    this.resize();
-  }
-
-  detach() {
-    if (this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
-  }
-
-  loop(t) {
-    this.program.uniforms.uTime.value = t * 0.001;
-    this.renderer.render({ scene: this.mesh });
-    this.raf = requestAnimationFrame(this.loop.bind(this));
-  }
-  startLoop() { if (!this.raf) this.raf = requestAnimationFrame(this.loop.bind(this)); }
-  stopLoop() { if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; } }
-
-  // Morphs the container from fromSrc to toSrc. `fitBox(natW, natH)` returns
-  // the {w,h} the container should end up at once viewing (uncropped —
-  // same contain-fit rule as the CSS). Two phases:
-  //   1. the frame stays at its CURRENT size the whole time; both photos
-  //      cover-fit (crop to fill) that stable box while the shader melts
-  //      between them — same as the reference component, where the slide
-  //      area is a fixed box and photos fill it edge to edge.
-  //   2. once the color settles, a quick resize to the incoming photo's
-  //      real, uncropped box, then the plain <img> takes back over.
-  // Size and color used to change on the same clock, which meant the
-  // frame's edges (and the crop) were shifting *while* the shader was
-  // blending — that reads as flicker, not a size change is why splitting
-  // these into two clean phases matters.
-  async run({ fromSrc, toSrc, fitBox, duration = 1.0, settle = 0.18, ease = 'power2.inOut' }) {
-    const gl = this.gl;
-    const [a, b] = await Promise.all([loadTexture(gl, fromSrc), loadTexture(gl, toSrc)]);
-    if (!a || !b) return false;
-
-    this.program.uniforms.tCurrent.value = a.texture;
-    this.program.uniforms.uCurrentSize.value = a.size;
-    this.program.uniforms.tNext.value = b.texture;
-    this.program.uniforms.uNextSize.value = b.size;
-    this.program.uniforms.uProgress.value = 0;
-
-    this.attach();
-    this.startLoop();
-
-    const target = fitBox(b.size[0], b.size[1]);
-    const morphDur = this.reducedMotion ? Math.min(duration, 0.3) : duration;
-    const settleDur = this.reducedMotion ? 0.001 : settle;
-    const startRect = this.container.getBoundingClientRect();
-    const size = { w: startRect.width, h: startRect.height };
-    const applySize = () => {
-      this.container.style.width = size.w + 'px';
-      this.container.style.height = size.h + 'px';
-      // Drive the canvas's own pixel size in lockstep with the box instead of
-      // waiting on the async ResizeObserver — that's what was causing the
-      // "snap" once the observer's batched callback finally fired.
-      this.resize();
-    };
-
-    await new Promise(resolve => {
-      const tl = gsap.timeline({ onComplete: resolve });
-      tl.to(this.program.uniforms.uProgress, { value: 1, duration: morphDur, ease });
-      tl.to(size, { w: target.w, h: target.h, duration: settleDur, ease: 'power2.inOut', onUpdate: applySize }, '>');
-    });
-
-    this.stopLoop();
-    this.detach();
-    return true;
-  }
-}
-
-window.__LightboxMorph = LightboxMorph;
 </script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script>
