@@ -1681,7 +1681,12 @@
       setMuted(false);
     }
   };
-  tryUnmuted();
+  // Do NOT call tryUnmuted() here on load — that used to unmute the
+  // background video immediately, racing (or overlapping) with the intro
+  // screen's own voice line. The video now stays muted until the intro
+  // audio actually finishes and dispatches 'introended' below, so the
+  // volition line always plays first and goodlife.mp4's audio only
+  // starts once that line has stopped.
 
   if(toggle){
     toggle.addEventListener('click', () => {
