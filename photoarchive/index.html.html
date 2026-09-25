@@ -1,0 +1,3453 @@
+<!DOCTYPE html>
+<html lang="en" class="intro-locked">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kevin Daison — photo archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:radial-gradient(circle at 30% 15%, #6e4c92 0%, #4a2f63 45%, #1c1520 100%);
+    --bg-solid:#241d2b;
+    --ink:#ede7f2;
+    --muted:#c3b6cf;
+    --line:rgba(237,231,242,.16);
+    --accent:#c9977a;
+    --soft:#f3f0eb;
+    --volition:#8fa4c4;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--bg-solid);
+    color:var(--ink);
+    font-family:'Inter',Arial,sans-serif;
+    font-size:14px;
+    line-height:1.35;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit}
+  .mono{font-family:'Space Mono',monospace}
+  .lower{text-transform:lowercase}
+  ::selection{background:var(--ink);color:var(--bg-solid)}
+
+  /* ---------- Color Bends background (disabled) ----------
+     React Bits' "Color Bends" turns out to be free/open-source (reactbits.dev,
+     MIT + Commons Clause) — not the Pro version I wrongly assumed earlier.
+     I still couldn't pull its exact shader body (page renders client-side,
+     GitHub blocked automated fetches of the source tree this session), but
+     its public usage example exposes the real prop/uniform interface —
+     color, speed, frequency, noise, bandWidth, rotation, fadeTop,
+     iterations, intensity — so this is a from-scratch GLSL shader built
+     against that same interface via three.js (already loaded on this page
+     for the hobbies graph) rather than another CSS approximation. A plain
+     dark gradient shows underneath as a no-WebGL/no-JS fallback.
+     Turned off (display:none) now that goodlife.mp4 is the background —
+     the shader JS below still runs its setup but the canvas never paints,
+     so switching back later is just removing this display:none and the
+     early return in the colorBends() IIFE. */
+  #colorBends{
+    display:none;
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    z-index:0;
+    pointer-events:none;
+    background:radial-gradient(circle at 30% 20%,#5b3d78 0%,#1c1520 70%);
+  }
+  /* ---------- Entry screen ----------
+     The old skyline-art gate is gone — the Volition-skill quote is now the
+     entry screen itself, visible immediately with its words still dimmed
+     (not-yet-spoken), with a "press any key to continue" prompt sitting
+     under it. Pressing/tapping starts the voiced audio and the word-by-word
+     reveal (see the script below), and a second press (or the audio
+     ending) fades the whole thing out into the site. Also doubles as the
+     user gesture that unlocks the background video's sound (see bgVideo()
+     below) — so entering the site is what turns audio on, rather than a
+     stray click somewhere. */
+  html.intro-locked,html.intro-locked body{overflow:hidden;height:100%}
+  .intro-screen{
+    position:fixed;
+    inset:0;
+    z-index:100000;
+    background:#0b0d10;
+    cursor:pointer;
+    overflow:hidden;
+    opacity:1;
+    transition:opacity .9s ease;
+  }
+  .intro-screen.is-leaving{opacity:0;pointer-events:none}
+  .intro-content{
+    position:relative;
+    z-index:1;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 24px;
+    text-align:center;
+  }
+  .intro-stage{
+    position:relative;
+    width:100%;
+    max-width:600px;
+    min-height:120px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .intro-press{
+    position:relative;
+    margin:4px 0 0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:opacity .5s ease;
+  }
+  .intro-press span{
+    color:#ffffff;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.32em;
+    text-transform:uppercase;
+    padding:10px 22px;
+    border-radius:999px;
+    background:rgba(8,9,11,.45);
+    border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(3px);
+    -webkit-backdrop-filter:blur(3px);
+    text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 18px rgba(0,0,0,.6);
+    animation:introPulse 1.9s ease-in-out infinite;
+  }
+  @keyframes introPulse{0%,100%{opacity:.55}50%{opacity:1}}
+  .intro-quote{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    text-align:center;
+    opacity:1;
+    transform:translateY(0);
+    pointer-events:auto;
+    transition:opacity 1.1s ease,transform 1.1s ease;
+  }
+  .intro-quote-avatar{
+    flex:none;
+    width:64px;
+    height:auto;
+    border-radius:2px;
+    filter:drop-shadow(0 6px 16px rgba(0,0,0,.6));
+  }
+  .intro-quote-skill{
+    margin:0;
+    font-size:11px;
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    color:#b9c7e6;
+    text-shadow:0 1px 4px rgba(0,0,0,.85);
+  }
+  .intro-quote-text{
+    margin:0;
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:clamp(15px,2.1vw,19px);
+    line-height:1.55;
+    color:#f5f2fa;
+  }
+  /* Apple-Music-lyrics style word highlight: words start dim/blurred
+     (not-yet-sung), brighten and lift as they become the active word in
+     time with the audio, then settle to a legible-but-quieter "already
+     sung" state — instead of the old permanent one-shot fade-in, so the
+     line always reads clearly against whatever's behind it. */
+  .intro-quote-text .word{
+    display:inline-block;
+    opacity:.28;
+    color:#c9c2d6;
+    filter:blur(2px);
+    transform:translateY(4px) scale(.97);
+    text-shadow:0 1px 6px rgba(0,0,0,.8);
+    transition:opacity .4s ease,transform .4s ease,filter .4s ease,color .4s ease,text-shadow .4s ease;
+  }
+  .intro-quote-text .word.is-played{
+    opacity:.62;
+    color:#e7e1f0;
+    filter:none;
+    transform:translateY(0) scale(1);
+    text-shadow:0 1px 6px rgba(0,0,0,.8);
+  }
+  .intro-quote-text .word.is-active{
+    opacity:1;
+    color:#ffffff;
+    filter:none;
+    transform:translateY(0) scale(1.06);
+    text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 18px rgba(255,255,255,.35);
+  }
+  .intro-screen.is-started .intro-press{opacity:0;pointer-events:none;animation:none}
+  @media(max-width:600px){
+    .intro-quote{gap:10px}
+    .intro-quote-avatar{width:52px}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .intro-press span{animation:none;opacity:1}
+    .intro-screen,.intro-quote,.intro-quote-text .word{transition:none}
+    .intro-quote-text .word{opacity:1;filter:none;transform:none;color:#f5f2fa}
+    .intro-quote-text .word.is-active{transform:none}
+  }
+  /* ---------- Background video ----------
+     goodlife.mp4, fixed and full-bleed behind everything. --bg (the purple
+     radial gradient, previously unused) is repurposed here as a translucent
+     tint over the video instead of an opaque background of its own, so the
+     footage shows through while the page keeps its purple mood and text
+     stays legible. */
+  .bg-video{
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    object-fit:cover;
+    z-index:-2;
+    pointer-events:none;
+  }
+  .bg-tint{
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    z-index:-1;
+    pointer-events:none;
+    background:var(--bg);
+    /* Turned off so the video plays through with no purple wash — the
+       element (and --bg) stay in place in case the tint comes back. */
+    opacity:0;
+  }
+  /* ---------- Glass morphism layer ----------
+     Sits above the video (and the disabled tint) but below every real
+     section (header/main/footer are z-index:1), so the whole site reads
+     as content on frosted glass floating over the footage rather than
+     text fighting the raw video for contrast. backdrop-filter blurs the
+     video itself as seen through this layer; the translucent white wash
+     on top lightens it so the now-black text/graph stays legible however
+     bright or busy the frame behind it gets. Fixed + full-bleed, same as
+     the video, so it tracks scroll instead of scrolling with the page. */
+  .bg-glass{
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    z-index:0;
+    pointer-events:none;
+    background:linear-gradient(180deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.42) 55%, rgba(255,255,255,.5) 100%);
+    backdrop-filter:blur(22px) saturate(1.1);
+    -webkit-backdrop-filter:blur(22px) saturate(1.1);
+  }
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+    /* No backdrop-filter support — fall back to a heavier flat wash so
+       legibility still holds even without the frosted blur. */
+    .bg-glass{background:rgba(255,255,255,.78)}
+  }
+  /* Visible speaker toggle for the background video's audio — browsers
+     won't reliably autoplay sound, so this gives visitors an explicit,
+     always-available control (rather than relying only on the
+     click-anywhere-to-unmute fallback in the script below). */
+  .audio-toggle{
+    position:fixed;
+    left:50%;
+    bottom:20px;
+    transform:translateX(-50%);
+    z-index:20;
+    width:36px;
+    height:36px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:rgba(36,29,43,.55);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    transition:border-color .2s ease,background .2s ease,transform .2s ease;
+  }
+  .audio-toggle:hover{border-color:var(--accent);transform:translateX(-50%) scale(1.06)}
+  .audio-toggle svg{width:15px;height:15px}
+  .audio-toggle .icon-off{display:none}
+  .audio-toggle.is-muted .icon-on{display:none}
+  .audio-toggle.is-muted .icon-off{display:block}
+  header,main,footer{position:relative;z-index:1}
+  header{
+    background:transparent;
+    position:relative;
+    z-index:10;
+  }
+  .header-inner{
+    width:100%;
+    padding:10px 30px 12px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(220px,280px);
+    gap:20px;
+    align-items:start;
+  }
+  .brand{
+    position:relative;
+    display:inline-block;
+    align-self:end;
+    margin:0;
+    font-size:clamp(38px,4.4vw,72px);
+    line-height:.82;
+    letter-spacing:-.085em;
+    font-weight:500;
+    white-space:nowrap;
+  }
+  /* ---------- Shiny Text ----------
+     Vanilla port of the ShinyText React component (framer-motion isn't
+     part of this page's stack) — same visual result, driven by a plain
+     CSS background-position keyframe instead of a rAF loop. Values below
+     are the exact props supplied: speed=2s, delay=0, color=#b5b5b5,
+     shineColor=#ffffff, spread=120deg, direction="left", no yoyo, no
+     pause-on-hover. */
+  .shiny-text{
+    display:inline-block;
+    background-image:linear-gradient(120deg,#b5b5b5 0%,#b5b5b5 35%,#ffffff 50%,#b5b5b5 65%,#b5b5b5 100%);
+    background-size:200% auto;
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+    background-position:150% center;
+    animation:shiny-text-left 2s linear 0s infinite;
+  }
+  @keyframes shiny-text-left{
+    from{background-position:150% center}
+    to{background-position:-50% center}
+  }
+  .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:24px;padding-top:0}
+  .intro{
+    max-width:310px;
+    margin:0;
+    text-align:right;
+    font-size:12px;
+    line-height:1.35;
+    color:#000000;
+  }
+  .intro em{font-family:'Fraunces',Georgia,serif;font-size:13px;color:#000000}
+  .navlinks{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:22px}
+  .navlinks a{
+    font-size:13px;
+    padding-bottom:3px;
+    color:#000000;
+    transition:color .2s ease;
+  }
+  /* Stay black on hover: the white blob's difference blend turns black text
+     white inside the circle. A tinted hover colour (the old accent) blends
+     to its inverse instead — that's the blue "instagram" in the circle. */
+  .navlinks a:hover{color:#000000}
+
+  .site-footer{
+    width:100%;
+    padding:16px 30px 24px;
+    display:flex;
+    justify-content:flex-end;
+  }
+  .site-footer p{
+    margin:0;
+    color:#000000;
+    font-size:10px;
+    letter-spacing:.03em;
+  }
+  main{width:100%}
+  section{width:100%;padding:0 30px}
+  .gallery-section{padding-top:0;min-height:calc(100vh - 92px)}
+  .section-topline{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:20px;
+    padding:8px 0 10px;
+  }
+  .section-label,.section-count{
+    margin:0;
+    color:#000000;
+    font:10px/1.2 'Space Mono',monospace;
+    letter-spacing:.06em;
+  }
+  .section-count{letter-spacing:0}
+  .gallery-intro{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:32px;
+    padding:14px 0 14px;
+  }
+  .section-title{
+    margin:0;
+    font-size:clamp(22px,2.6vw,36px);
+    line-height:.95;
+    letter-spacing:-.055em;
+    font-weight:500;
+    color:#000000;
+  }
+  .photo-grid{
+    display:grid;
+    grid-template-columns:repeat(12,1fr);
+    grid-auto-rows:minmax(46px,6.4vw);
+    gap:16px;
+    /* One shared vanishing point for every tile (instead of each tile
+       getting its own perspective() — see .photo-frame below) so the wall
+       reads as a single surface curving toward the viewer. */
+    perspective:1600px;
+    perspective-origin:50% 30%;
+  }
+  .project-card{
+    position:relative;
+    min-width:0;
+    min-height:0;
+    cursor:pointer;
+    outline:none;
+    /* Tilt state lives on the CARD (not the photo) so .photo-frame and
+       .card-info inherit the exact same values and can be driven by the
+       same transform. JS writes --mx/--my/--rx/--ry/--grx/--gry here. */
+    --mx:0px;--my:0px;--rx:0deg;--ry:0deg;--base-ry:0deg;--grx:0deg;--gry:0deg;
+    /* Gentle, continuous float — separate from .photo-frame's own
+       transform (which already handles the fixed inward lean, mouse
+       parallax and hover lift), so this never touches that math or the
+       tile's shape/position. Just a slow bob plus a faint inward/outward
+       tilt, staggered per tile via --float-delay so the whole wall
+       doesn't bob in unison. */
+    animation:tileFloat var(--float-dur,7s) ease-in-out infinite;
+    animation-delay:var(--float-delay,0s);
+  }
+  .project-card:nth-child(odd){--float-tilt:1.1deg;--float-x:-5px}
+  .project-card:nth-child(even){--float-tilt:-1.1deg;--float-x:5px}
+  .project-card:nth-child(1){--float-delay:0s;--float-dur:7.4s}
+  .project-card:nth-child(2){--float-delay:-1.1s;--float-dur:6.6s}
+  .project-card:nth-child(3){--float-delay:-2.3s;--float-dur:8.1s}
+  .project-card:nth-child(4){--float-delay:-.6s;--float-dur:7s}
+  .project-card:nth-child(5){--float-delay:-3.4s;--float-dur:6.2s}
+  .project-card:nth-child(6){--float-delay:-1.8s;--float-dur:8.6s}
+  .project-card:nth-child(7){--float-delay:-4.2s;--float-dur:7.2s}
+  .project-card:nth-child(8){--float-delay:-2.6s;--float-dur:6.9s}
+  .project-card:nth-child(9){--float-delay:-.9s;--float-dur:7.8s}
+  .project-card:nth-child(10){--float-delay:-3.9s;--float-dur:6.4s}
+  .project-card:nth-child(11){--float-delay:-1.5s;--float-dur:8.3s}
+  .project-card:nth-child(12){--float-delay:-5.1s;--float-dur:7.6s}
+  @keyframes tileFloat{
+    0%,100%{transform:translate(0,0) rotate(0deg)}
+    50%{transform:translate(var(--float-x,0px),-11px) rotate(var(--float-tilt,.5deg))}
+  }
+  .project-card:hover{animation-play-state:paused}
+  .project-card:focus-visible{box-shadow:0 0 0 2px var(--accent) inset;z-index:2}
+  /* Hand-placed mosaic tiling across a 12-column x 8-row grid. The tiles no
+     longer butt up edge-to-edge (see the gap above and the drop-shadows on
+     .photo-frame) — they now float as separate panels, tilted inward. */
+  .project-card:nth-child(1){grid-column:1/5;grid-row:1/4}
+  .project-card:nth-child(2){grid-column:5/10;grid-row:1/3}
+  .project-card:nth-child(3){grid-column:10/13;grid-row:1/4}
+  .project-card:nth-child(4){grid-column:5/10;grid-row:3/5}
+  .project-card:nth-child(5){grid-column:1/3;grid-row:4/5}
+  .project-card:nth-child(6){grid-column:3/5;grid-row:4/5}
+  .project-card:nth-child(7){grid-column:10/13;grid-row:4/5}
+  .project-card:nth-child(8){grid-column:1/6;grid-row:5/9}
+  .project-card:nth-child(9){grid-column:6/10;grid-row:5/7}
+  .project-card:nth-child(10){grid-column:10/13;grid-row:5/8}
+  .project-card:nth-child(11){grid-column:6/10;grid-row:7/9}
+  .project-card:nth-child(12){grid-column:10/13;grid-row:8/9}
+  /* Fixed per-tile lean, based on each tile's horizontal position in the
+     12-column grid (column centre relative to the middle, col 6.5):
+     tiles left of centre get a positive rotateY (their right/inner edge
+     comes toward the viewer), tiles right of centre get negative — so the
+     whole wall gently curves inward like a shallow cylinder, instead of
+     sitting on one flat plane. */
+  .project-card:nth-child(1){--base-ry:1.8deg}
+  .project-card:nth-child(2){--base-ry:-.3deg}
+  .project-card:nth-child(3){--base-ry:-2deg}
+  .project-card:nth-child(4){--base-ry:-.3deg}
+  .project-card:nth-child(5){--base-ry:2.3deg}
+  .project-card:nth-child(6){--base-ry:1.3deg}
+  .project-card:nth-child(7){--base-ry:-2deg}
+  .project-card:nth-child(8){--base-ry:1.7deg}
+  .project-card:nth-child(9){--base-ry:-.5deg}
+  .project-card:nth-child(10){--base-ry:-2deg}
+  .project-card:nth-child(11){--base-ry:-.5deg}
+  .project-card:nth-child(12){--base-ry:-2deg}
+  .photo-frame{
+    position:relative;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:var(--soft);
+    border-radius:2px;
+    box-shadow:0 20px 36px -16px rgba(0,0,0,.55),0 5px 12px -5px rgba(0,0,0,.4);
+    /* No local perspective() here on purpose — the shared vanishing point
+       now lives on .photo-grid above. --base-ry is the fixed inward lean
+       set per tile just above; --rx/--ry are the existing per-tile
+       mouse-parallax tilt (only while directly hovering this tile);
+       --grx/--gry are a *global* cursor-proximity lean (see iglooReact()
+       further down) that's always live, like the whole wall of tiles is a
+       loosely stacked structure reacting to wherever the pointer is —
+       not just the one tile under it. */
+    transform:rotateX(calc(var(--rx) + var(--grx))) rotateY(calc(var(--base-ry) + var(--ry) + var(--gry))) scale(1);
+    transition:transform .28s cubic-bezier(.23,1,.32,1),box-shadow .28s cubic-bezier(.23,1,.32,1);
+    will-change:transform;
+  }
+  .project-card:hover .photo-frame,
+  .project-card:hover .card-info{
+    /* Eases the fixed lean back toward flat and lifts the tile toward the
+       viewer, on top of whatever mouse-parallax and global reactive tilt
+       is already active. .card-info shares this exact transform so the
+       caption stays glued to the tile — keep the two in sync. */
+    transform:rotateX(calc(var(--rx) + var(--grx))) rotateY(calc(var(--ry) + var(--gry))) translateZ(28px) scale(1.03);
+  }
+  .project-card:hover .photo-frame{
+    box-shadow:0 32px 54px -18px rgba(0,0,0,.6),0 10px 18px -7px rgba(0,0,0,.45);
+  }
+  .photo-frame::before,.photo-frame::after{
+    content:"";
+    position:absolute;
+    pointer-events:none;
+    z-index:0;
+  }
+  .photo-frame::before{
+    inset:-14%;
+    background:var(--tone,linear-gradient(145deg,#d6cec2,#f4f0e8));
+    transform:translate(var(--mx),var(--my)) scale(1.14);
+    transition:transform .12s ease-out;
+  }
+  .photo-frame::after{
+    width:55%;
+    height:48%;
+    left:22%;
+    top:24%;
+    transform:translate(calc(var(--mx) * 1.6),calc(var(--my) * 1.6)) rotate(-7deg);
+    opacity:.6;
+    transition:transform .12s ease-out,opacity .2s ease;
+  }
+  .project-card:hover .photo-frame::after{opacity:.85}
+  .photo-frame img,.photo-frame video{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+    z-index:1;
+    transform:translate(var(--mx),var(--my)) scale(1.12);
+    transition:transform .12s ease-out,filter .35s ease;
+  }
+  .project-card:hover .photo-frame img,.project-card:hover .photo-frame video{transform:translate(var(--mx),var(--my)) scale(1.2);filter:saturate(1.08)}
+  .photo-frame.empty .empty-label{opacity:1}
+  .empty-label{
+    position:absolute;
+    z-index:2;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%) rotate(-7deg) scale(1);
+    color:rgba(23,21,28,.62);
+    font:10px 'Space Mono',monospace;
+    text-align:center;
+    opacity:0;
+    transition:opacity .2s ease,transform .28s cubic-bezier(.23,1,.32,1);
+    white-space:nowrap;
+  }
+  .project-card:hover .empty-label{transform:translate(-50%,-50%) rotate(-7deg) scale(1.12)}
+  .photo-frame.empty::before{background:var(--tone,linear-gradient(145deg,#d6cec2,#f4f0e8))}
+  .photo-frame.empty::after{opacity:.7}
+  .photo-frame:not(.empty)::before,.photo-frame:not(.empty)::after{opacity:0}
+  /* Captions live inside the tile itself now (a bottom scrim revealed on
+     hover/focus) since the mosaic tiles butt up against each other with
+     no room for text underneath. */
+  .card-info{
+    /* Same box as the photo tile (inset:0, same radius, same default
+       transform-origin) with the same transform + easing as .photo-frame,
+       so it tilts / lifts / parallaxes in lockstep instead of sitting flat
+       while the photo moves. Text is pushed to the bottom with flex; the
+       scrim is a ::before so it hugs the bottom edge only. */
+    position:absolute;
+    inset:0;
+    z-index:3;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    padding:22px 10px 10px;
+    border-radius:2px;
+    opacity:0;
+    transform:rotateX(calc(var(--rx) + var(--grx))) rotateY(calc(var(--base-ry) + var(--ry) + var(--gry))) scale(1);
+    transition:opacity .25s ease,transform .28s cubic-bezier(.23,1,.32,1);
+    will-change:transform;
+    pointer-events:none;
+  }
+  .card-info::before{
+    content:"";
+    position:absolute;
+    left:0;right:0;bottom:0;
+    height:min(100%,96px);
+    z-index:-1;
+    border-radius:0 0 2px 2px;
+    background:linear-gradient(to top,rgba(15,11,20,.85),rgba(15,11,20,0));
+    pointer-events:none;
+  }
+  .project-card:hover .card-info,.project-card:focus-visible .card-info{opacity:1}
+  .card-date,.card-note{
+    display:block;
+    color:var(--muted);
+    font:10px/1.3 'Space Mono',monospace;
+  }
+  .card-title{
+    display:block;
+    margin-top:3px;
+    font-size:14px;
+    line-height:1.05;
+    letter-spacing:-.02em;
+    font-weight:500;
+    color:var(--ink);
+  }
+  .card-note{margin-top:4px;line-height:1.25;font-size:10px}
+#hobbies{
+    padding-top:11px;
+    scroll-margin-top:12px;
+  }
+  .hobbies-heading{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:20px;
+    padding:10px 0 16px;
+  }
+  .hobbies-heading .section-title{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:400}
+  .hobbies-subtitle{
+    max-width:360px;
+    margin:0;
+    color:var(--muted);
+    font:11px/1.5 'Space Mono',monospace;
+    text-align:right;
+  }
+  .web-area{
+    position:relative;
+    width:100vw;
+    left:50%;
+    margin-left:-50vw;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(260px,28%);
+  }
+  .graph-view{min-width:0;position:relative}
+  #dnaCanvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    z-index:3;
+    display:block;
+    transition:opacity .25s ease;
+  }
+  .has-custom-cursor #dnaCanvas{cursor:none}
+  .hobby-branch{
+    position:relative;
+    min-height:560px;
+    padding:42px clamp(24px,4vw,76px) 42px 44px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    overflow:hidden;
+  }
+  .hobby-branch::after{
+    content:"";
+    position:absolute;
+    top:calc(50% - 4px);
+    left:-14px;
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--accent);
+    opacity:0;
+    transform:scale(.4);
+    transition:opacity .25s ease,transform .35s cubic-bezier(.23,1,.32,1);
+  }
+  .hobby-branch.is-open::after{opacity:1;transform:scale(1)}
+  .branch-kicker{margin:0 0 18px;color:#000000;font:10px/1.2 'Space Mono',monospace;letter-spacing:.08em;text-transform:uppercase}
+  .branch-placeholder{margin:0;color:#000000;font:12px/1.5 'Space Mono',monospace;max-width:210px}
+  .hobby-branch.is-open .branch-placeholder{display:none}
+  .hobby-branch .node-caption{max-width:300px;margin:0;padding:0;text-align:left}
+  .hobby-branch .node-caption .nc-name{font-size:clamp(28px,3.3vw,52px);line-height:.92;color:#000000}
+  .hobby-branch .node-caption .nc-desc{margin-top:18px;font-size:11px;line-height:1.55;color:#000000}
+  .hobby-branch .node-caption.show{opacity:1;transform:none}
+  #graph3d{
+    width:100%;
+    height:min(76vh,720px);
+    min-height:560px;
+    cursor:grab;
+    opacity:0;
+    pointer-events:none;
+    transform:scale(0.94);
+    transform-origin:center center;
+    transition:opacity .38s ease, transform .45s cubic-bezier(.22,1,.36,1);
+  }
+  #graph3d.is-visible{opacity:1;transform:scale(1)}
+  #graph3d:active{cursor:grabbing}
+  #graph3d canvas{outline:none}
+  .node-caption{
+    max-width:420px;
+    min-height:20px;
+    margin:8px auto 0;
+    padding:0 20px;
+    text-align:center;
+    opacity:0;
+    transform:translateY(6px);
+    transition:opacity .35s ease,transform .35s ease;
+  }
+  .node-caption.show{opacity:1;transform:translateY(0)}
+  .node-caption .nc-name{font:italic 18px 'Fraunces',Georgia,serif;color:#000000}
+  .node-caption .nc-desc{margin-top:6px;color:#000000;font:12px/1.3 'Space Mono',monospace}
+
+  #lightbox{
+    position:fixed;
+    inset:0;
+    z-index:200;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:30px;
+    background:rgba(23,21,28,.94);
+  }
+  #lightbox.open{display:flex}
+  .lb-inner{width:min(560px,100%);text-align:center}
+  /* Constant-size stage the frame sits inside. Its own footprint never
+     changes between photos or during the morph transition, so lb-cap and
+     lb-nav — anchored right after it — always land in the same place. */
+  .lb-stage{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:min(560px,90vw);
+    height:70vh;
+    max-width:100%;
+    margin:0 auto;
+  }
+  /* The frame's size has gone through a few iterations:
+     1) A fixed box (aspect-ratio + cream background) — caused visible
+        letterbox bars whenever a photo's real ratio didn't match the box.
+     2) No size of its own at all (shrink-wrap to the photo) — killed the
+        letterboxing, but meant the box's own footprint changed with every
+        photo. The morph engine below even leans on this by tweening
+        .lb-frame's own width/height as part of its transition effect.
+        Fine for the photo itself, but prev/next/close sit right after it
+        in the same flow, so they physically moved on every navigation —
+        that's the "buttons keep jumping" bug.
+     Fix: keep .lb-frame's own shrink-wrap sizing (below) so the morph
+     effect still works exactly as designed, but hold it inside a new
+     outer .lb-stage with a fixed size (see .lb-stage rule). The stage's
+     footprint never changes, so the nav row anchored after it never
+     moves — only the photo/frame inside the stage resizes. */
+  .lb-frame{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    max-width:100%;
+    overflow:visible;
+  }
+  .lb-frame:not(.has-image){
+    width:100%;
+    max-height:70vh;
+    aspect-ratio:var(--ratio,4/5);
+    /* Was plain var(--soft) (flat cream), which is exactly what a
+       genuinely-missing photo should look like — but it made the totally
+       ordinary "still fetching this item's media" moment look identical
+       to a broken/missing one. Using the item's own --tone here (same
+       gradient the grid thumbnail already shows before its photo loads)
+       makes a normal, brief load look like part of the design instead of
+       an error state. */
+    background:var(--tone,var(--soft));
+    transition:aspect-ratio .25s ease;
+  }
+  .lb-frame:not(.has-image):not(.lb-missing){animation:lbPulse 1.6s ease-in-out infinite}
+  @keyframes lbPulse{0%,100%{opacity:1}50%{opacity:.72}}
+  /* Photo viewer ("lightbox") — images morph in/out on navigation via a
+     soft blur+scale cross-dissolve (this is where the "morph slider" idea
+     actually belongs, per feedback: applied to the single-photo viewer
+     rather than as a separate homepage slider). */
+  .lb-frame img,.lb-frame video{
+    display:block;
+    max-width:min(560px,90vw);
+    max-height:70vh;
+    width:auto;
+    height:auto;
+    object-fit:contain;
+    opacity:1;
+    transition:opacity .5s cubic-bezier(.22,1,.36,1),filter .65s cubic-bezier(.22,1,.36,1),transform .65s cubic-bezier(.22,1,.36,1);
+  }
+  .lb-frame img.lb-morphing,.lb-frame video.lb-morphing{
+    opacity:0;
+    filter:blur(20px) saturate(1.15);
+    transform:scale(1.06);
+  }
+  /* Canvas used only while the WebGL morph (image→image) is running; the
+     real <img> is hidden and this takes over, then it's removed again. */
+  .lb-morph-canvas{
+    position:absolute;
+    inset:0;
+    display:block;
+    width:100%;
+    height:100%;
+    z-index:1;
+  }
+  /* "add this photo" text should only ever appear once a media item has
+     genuinely failed to load (.lb-missing, set by the error handler
+     below) — never just because it hasn't finished loading yet. Gating
+     this on ":not(.has-image)" alone made every load (especially video,
+     whose loadedmetadata lags well behind insertion) flash the "missing"
+     placeholder before the real media popped in. */
+  .lb-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:rgba(23,21,28,.6);font:11px 'Space Mono',monospace}
+  .lb-frame.lb-missing .lb-empty{display:flex}
+  .lb-cap{margin-top:15px;color:var(--ink);font:12px/1.4 'Space Mono',monospace}
+  .lb-nav{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:22px}
+  .lb-nav span,.lb-close{color:#fff;cursor:pointer;opacity:.72;font:12px 'Space Mono',monospace}
+  .lb-nav span:hover,.lb-close:hover{opacity:1}
+  .lb-count{opacity:.55!important;cursor:default!important;white-space:nowrap}
+  .lb-count:empty{display:none}
+
+  .has-custom-cursor body,.has-custom-cursor a,.has-custom-cursor button,.has-custom-cursor .project-card,.has-custom-cursor [role="button"],.has-custom-cursor #graph3d{cursor:none!important}
+  /* ---------- Blob Cursor ----------
+     Ported from the React "BlobCursor" component (a small trail of circles
+     merged into one gooey shape via an SVG goo filter, each chasing the
+     pointer with its own lag) into vanilla JS/GSAP, since this page has no
+     React runtime. Settings: trailCount 3, blobColor #ffffff,
+     blobColorOnTarget #ffffff (was #b497cf), hideDefaultCursor on. */
+  .blob-cursor-container{
+    position:fixed;top:0;left:0;width:0;height:0;
+    pointer-events:none;z-index:9999;
+    /* Outer layer: blend only. */
+    mix-blend-mode:difference;
+  }
+  .blob-cursor-goo{
+    /* Inner layer: goo filter only (kept off the blended element so the
+       two effects don't fight on one node). */
+    position:absolute;top:0;left:0;width:0;height:0;
+    filter:url(#blobGoo);
+  }
+  .blob-cursor-blob{
+    position:absolute;left:0;top:0;
+    border-radius:50%;
+    background:#fff;
+    /* No will-change:transform here on purpose: it pins the blob's bitmap
+       at its first (scale 1) size, so the hover zoom (scale 1.9) just
+       stretches that low-res bitmap = pixelated edges. Without it the
+       browser re-rasterises at the current scale and browser-zoom level. */
+  }
+  /* Zoom-lens preview kept as its own small fixed "viewport" (clipped
+     circle) that tracks the raw pointer position directly — independent of
+     the bracket cursor above, which now glides with GSAP easing and
+     shouldn't be the thing clipping a magnified image. Shown only while
+     hovering a photo tile or the lightbox frame. */
+  .cursor-lens-viewport{
+    position:fixed;left:0;top:0;width:38px;height:38px;
+    margin:-19px 0 0 -19px;
+    border-radius:50%;border:1px solid var(--accent);
+    overflow:hidden;pointer-events:none;z-index:9998;opacity:0;
+    transition:opacity .15s ease;
+  }
+  .cursor-lens-viewport.visible{opacity:1}
+  .cursor-lens{position:absolute;top:0;left:0;background-repeat:no-repeat;background-position:center;}
+  .cursor-lens-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-7deg);color:rgba(23,21,28,.55);font-family:'Space Mono',monospace;white-space:nowrap;opacity:0;transition:opacity .15s ease;}
+  @media (pointer:coarse){.blob-cursor-container,.cursor-lens-viewport{display:none}}
+
+
+  @media(max-width:1100px){
+    .photo-grid{grid-auto-rows:minmax(40px,7vw)}
+  }
+  @media(max-width:760px){
+    .header-inner{grid-template-columns:1fr;padding:16px 20px 22px;gap:24px}
+    .header-right{align-items:flex-start;gap:24px}
+    .intro{text-align:left}
+    .navlinks{justify-content:flex-start;gap:20px}
+    section{padding-left:20px;padding-right:20px}
+    .gallery-section{min-height:calc(100vh - 184px)}
+    .gallery-intro,.hobbies-heading{display:block}
+    .web-area{grid-template-columns:1fr}
+    .hobby-branch{min-height:190px;padding:28px 24px}
+    .hobby-branch::after{left:calc(50% - 4px);top:-14px}
+    .hobby-branch .node-caption{max-width:none}
+    .hobby-branch .node-caption .nc-name{font-size:34px}
+    .gallery-note,.hobbies-subtitle{margin-top:16px;text-align:left}
+    /* The hand-placed mosaic is tuned for wider screens; on a phone it
+       falls back to a simple, full-width stacked feed of the same photos,
+       each keeping its natural photo shape via --ratio. */
+    .photo-grid{display:flex;flex-direction:column;gap:14px;perspective:none}
+    .project-card{grid-column:auto!important;grid-row:auto!important;width:100%;--base-ry:0deg!important}
+    .photo-frame{height:auto;aspect-ratio:var(--ratio,4/5);box-shadow:none}
+    .project-card:hover .photo-frame{transform:rotateX(var(--rx)) rotateY(var(--ry)) scale(1);box-shadow:none}
+    .project-card .card-info,.project-card:hover .card-info,.project-card:focus-visible .card-info{position:static;display:block;opacity:1;transform:none;will-change:auto;border-radius:0;padding:8px 0 0;pointer-events:auto}
+    .card-info::before{display:none}
+    .card-title,.card-date,.card-note{color:inherit}
+    .gallery-footer{display:block;padding-bottom:54px}
+    .gallery-footer p:last-child{margin-top:9px;text-align:left}
+  }
+  @media(max-width:460px){
+    .brand{font-size:clamp(44px,14vw,68px)}
+    #graph3d{min-height:420px;height:66vh}
+  }
+  @media(prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .photo-frame img,.node-caption,.hobby-branch::before,.hobby-branch::after,.lb-frame img,.lb-frame video{transition:none}
+    .shiny-text{animation:none;background-position:50% center}
+    .project-card{animation:none}
+  }
+</style>
+</head>
+<body>
+<div id="introScreen" class="intro-screen" role="dialog" aria-modal="true" aria-label="Entry">
+  <div class="intro-content">
+    <div class="intro-stage">
+      <div class="intro-quote">
+        <img class="intro-quote-avatar" src="volition-icon.png" alt="" aria-hidden="true">
+        <p class="intro-quote-skill mono">volition</p>
+        <p class="intro-quote-text" id="introQuoteText">Subdue the regrets. Dust yourself off. Proceed. You'll get it in the next life. Do what you can with this one while you're alive.</p>
+        <p class="intro-press mono"><span>press any key to continue</span></p>
+      </div>
+    </div>
+  </div>
+  <audio id="introAudio" src="intro-vocal.mp3" preload="auto"></audio>
+</div>
+<script>
+  (function introScreen(){
+    const intro = document.getElementById('introScreen');
+    const audio = document.getElementById('introAudio');
+    const quoteText = document.getElementById('introQuoteText');
+    if(!intro){ document.documentElement.classList.remove('intro-locked'); return; }
+
+    // Break the quote into per-word spans up front so the reveal can turn
+    // them on one at a time, timed against the audio.
+    let wordEls = [];
+    if(quoteText){
+      const words = quoteText.textContent.trim().split(/\s+/);
+      quoteText.innerHTML = words.map(w => `<span class="word">${w}</span>`).join(' ');
+      wordEls = Array.from(quoteText.querySelectorAll('.word'));
+    }
+
+    const FALLBACK_DURATION = 9.8; // seconds, used if audio metadata isn't ready yet
+
+    // Exact word-level timestamps (seconds) from the forced-alignment
+    // transcript for intro-vocal.mp3 — this is what makes the highlight
+    // actually track the spoken word (Apple-Music-lyrics style) instead of
+    // estimating pace from word length. Index-matched 1:1 to wordEls,
+    // which is built from the identical transcript text above.
+    const WORD_TIMINGS = [
+      {s:0.32, e:0.80}, {s:0.80, e:1.04}, {s:1.04, e:1.84}, {s:1.92, e:2.32},
+      {s:2.32, e:2.64}, {s:2.64, e:3.20}, {s:3.20, e:3.92}, {s:4.56, e:4.96},
+      {s:4.96, e:5.04}, {s:5.04, e:5.20}, {s:5.20, e:5.36}, {s:5.36, e:5.52},
+      {s:5.52, e:5.68}, {s:5.68, e:6.32}, {s:6.64, e:6.88}, {s:6.88, e:7.04},
+      {s:7.04, e:7.20}, {s:7.20, e:7.36}, {s:7.36, e:7.60}, {s:7.60, e:7.76},
+      {s:7.76, e:8.16}, {s:8.16, e:8.56}, {s:8.56, e:8.88}, {s:8.88, e:9.20}
+    ];
+
+    let wordsRevealed = false;
+    const revealWords = () => {
+      if(wordsRevealed || !wordEls.length) return;
+      wordsRevealed = true;
+
+      // Prefer the exact timestamps whenever the word count matches the
+      // transcript they were measured against; fall back to an even
+      // length-weighted spread only if the quote text is ever edited out
+      // of sync with WORD_TIMINGS.
+      const useExact = wordEls.length === WORD_TIMINGS.length;
+      let timeline, holdMs;
+      if(useExact){
+        timeline = WORD_TIMINGS.map(t => t.s * 1000);
+        holdMs = WORD_TIMINGS[WORD_TIMINGS.length - 1].e * 1000;
+      } else {
+        const durationSec = (audio.duration && isFinite(audio.duration)) ? audio.duration : FALLBACK_DURATION;
+        const leadMs = 300, tailMs = 400;
+        const totalMs = Math.max(durationSec * 1000 - leadMs - tailMs, wordEls.length * 120);
+        const weights = wordEls.map(el => Math.max(el.textContent.length, 3));
+        const totalWeight = weights.reduce((a, b) => a + b, 0);
+        let cursor = leadMs;
+        timeline = weights.map(w => { const start = cursor; cursor += (w / totalWeight) * totalMs; return start; });
+        holdMs = leadMs + totalMs;
+      }
+
+      wordEls.forEach((el, i) => {
+        setTimeout(() => {
+          if(i > 0) wordEls[i - 1].classList.replace('is-active', 'is-played');
+          el.classList.add('is-active');
+        }, timeline[i]);
+      });
+      // Settle the final word to its "played" state once the line ends,
+      // instead of leaving it glowing after the audio has finished.
+      setTimeout(() => {
+        const last = wordEls[wordEls.length - 1];
+        if(last) last.classList.replace('is-active', 'is-played');
+      }, holdMs);
+    };
+
+    let advanced = false;
+    const advance = () => {
+      if(advanced) return;
+      advanced = true;
+      intro.classList.add('is-started');
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+
+      if(audio.readyState >= 1){
+        revealWords();
+      } else {
+        audio.addEventListener('loadedmetadata', revealWords, {once:true});
+        setTimeout(revealWords, 600); // fallback in case metadata never fires
+      }
+
+      let dismissed = false;
+      const dismiss = () => {
+        if(dismissed) return;
+        dismissed = true;
+        intro.classList.add('is-leaving');
+        document.documentElement.classList.remove('intro-locked');
+        // Now that the intro's own voice line is done, unlock the
+        // background video's audio (see bgVideo() further down).
+        document.dispatchEvent(new Event('introended'));
+        setTimeout(() => { if(intro.parentNode) intro.parentNode.removeChild(intro); }, 950);
+      };
+      audio.addEventListener('ended', dismiss, {once:true});
+      audio.addEventListener('error', dismiss, {once:true});
+      // Also let a second press/tap skip straight through, once the quote
+      // has had a moment to actually be read.
+      setTimeout(() => {
+        document.addEventListener('keydown', dismiss, {once:true});
+        document.addEventListener('pointerdown', dismiss, {once:true});
+      }, 1400);
+    };
+
+    document.addEventListener('keydown', advance, {once:true});
+    document.addEventListener('pointerdown', advance, {once:true});
+  })();
+</script>
+<canvas id="colorBends" aria-hidden="true"></canvas>
+<video id="bgVideo" class="bg-video" src="goodlife.mp4" autoplay loop muted playsinline aria-hidden="true"></video>
+<div class="bg-tint" aria-hidden="true"></div>
+<div class="bg-glass" aria-hidden="true"></div>
+<button id="audioToggle" class="audio-toggle" type="button" aria-label="Toggle background audio" aria-pressed="false">
+  <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.3 8.7a5 5 0 0 1 0 6.6"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+  <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg>
+</button>
+<header>
+  <div class="header-inner">
+    <a href="#photos" class="brand shiny-text" id="brandName" aria-label="Kevin Daison home">Kevin Daison.</a>
+    <div class="header-right">
+      <p class="intro lower">a small archive of photographs, passing thoughts, and the things i keep coming back to. <em>welcome to my archive.</em></p>
+      <nav class="navlinks lower" aria-label="primary navigation">
+        <a href="https://www.instagram.com/kevin_daison/" target="_blank" rel="noopener">instagram</a>
+        <a href="https://discordid.netlify.app/?id=1323343599877881987" target="_blank" rel="noopener">discord</a>
+        <a href="https://open.spotify.com/user/54wtsmgbbtohtfoau41fq7hgk?si=9e6a3a4b1c9c42c9&nd=1&dlsi=f9dced0646da4d3b" target="_blank" rel="noopener">spotify</a>
+        <a href="https://letterboxd.com/yeage_r/" target="_blank" rel="noopener">letterboxd</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="photos" class="gallery-section">
+    <div class="section-topline">
+      <p class="section-label lower">01 / visual log</p>
+      <p class="section-count lower" id="frameCount">visual log</p>
+    </div>
+    <div class="gallery-intro">
+    
+    </div>
+    <div class="photo-grid" id="photoGrid" aria-live="polite"></div>
+  </section>
+<section id="hobbies">
+    <div class="section-topline">
+
+      <p class="section-label lower">02 / tangent</p>
+      <p class="section-count lower">interactive</p>
+    </div>
+    <div class="hobbies-heading">
+      <h2 class="section-title lower">what i'm into</h2>
+    </div>
+    <div class="web-area">
+      <div class="graph-view">
+        <canvas id="dnaCanvas" aria-hidden="true"></canvas>
+        <div id="graph3d"></div>
+      </div>
+      <aside class="hobby-branch" id="hobbyBranch" aria-live="polite">
+        <p class="branch-kicker">selected thread</p>
+        <p class="branch-placeholder">click a hobby to open a note</p>
+        <div class="node-caption" id="nodeCaption">
+          <div class="nc-name lower" id="ncName"></div>
+          <div class="nc-desc lower" id="ncDesc"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+<footer class="site-footer">
+  <p class="mono lower">© 2026 kevin daison. all rights reserved.</p>
+</footer>
+
+<div id="lightbox" onclick="lbBackdrop(event)" role="dialog" aria-modal="true" aria-label="photo viewer">
+  <div class="lb-inner">
+    <div class="lb-stage">
+      <div class="lb-frame" id="lbFrame">
+        <img id="lbImage" alt="">
+        <span class="lb-empty lower">add this photo in the photos folder</span>
+      </div>
+    </div>
+    <div class="lb-cap lower" id="lbCap"></div>
+    <div class="lb-nav lower">
+      <span onclick="stepLB(-1)">← prev</span>
+      <span class="lb-count mono" id="lbCount"></span>
+      <span onclick="stepLB(1)">next →</span>
+      <span class="lb-close" onclick="closeLB()">close</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// Each item can hold ONE or MANY photos/videos in its `media` array.
+  // Just add more { src:'...', alt:'...' } objects to a card's media array to
+  // turn it into a multi-photo set — browse them with prev/next in the lightbox,
+  // same as the reference site's "prev · 1/4 · next" behaviour.
+  // Videos work the same way: just point src at an .mp4/.webm/.mov file.
+  // You never need to set an aspect ratio by hand — each frame automatically
+  // takes on the true aspect ratio of whatever photo or video you upload.
+  //
+  // TONE IS OPTIONAL. It's just the placeholder-tile color shown before a
+  // photo loads (or if a file is missing). Leave it out entirely and one
+  // gets auto-picked from TONE_PALETTE below, cycling by entry order — so
+  // adding a new day is just one object with date/title/note/media, nothing
+  // to pick or match. Only set `tone` by hand if you want a specific color.
+  //
+  // COPY/PASTE TEMPLATE for a new entry:
+  // {date:'month year', title:'short title', note:'one word', media:[
+  //   {src:'photos/your-file.jpg', alt:'short description'}
+  // ]},
+
+  const TONE_PALETTE = [
+    'linear-gradient(145deg,#d7c1a9,#f6ead7)',
+    'linear-gradient(145deg,#b8c9d4,#e8edf0)',
+    'linear-gradient(145deg,#7894a0,#d1dedb)',
+    'linear-gradient(145deg,#343b7b,#94a8d4)',
+    'linear-gradient(145deg,#b85b54,#f0c19c)',
+    'linear-gradient(145deg,#d0a14d,#f3e2af)',
+    'linear-gradient(145deg,#85686a,#dfc7bc)',
+    'linear-gradient(145deg,#5f8066,#c1d4aa)',
+    'linear-gradient(145deg,#98a8bd,#e6d3a8)',
+    'linear-gradient(145deg,#b9a07e,#efe3ce)',
+    'linear-gradient(145deg,#9cb6bd,#eef1dc)',
+    'linear-gradient(145deg,#b78376,#e7d0c6)'
+  ];
+
+  const photoItems = [
+    {date:'october 2025', title:'Touchdesigner Saturday', note:'hostel', ratio:'3/4', media:[
+      {src:'photos/td.jpeg', alt:'A quiet night at hostel'},
+      {src:'photos/td1.jpeg', alt:'Another frame from the same night'}
+    ]},
+    {date:'january 2026', title:'The Bienalle', note:'art exhibition', ratio:'4/5', media:[
+      {src:'photos/bookshelf-04.mp4', alt:'A final clip from the bookshelf'},
+      {src:'photos/bookshelf-02.mp4', alt:'A clip from the bookshelf'},
+      {src:'photos/bookshelf-03.mp4', alt:'Another clip from the bookshelf'},
+      {src:'photos/bookshelf-01.jpg', alt:'A detail from the bookshelf'},
+      {src:'photos/biennale1.jpeg', alt:'A room of glowing CRT televisions'},
+      {src:'photos/biennale2.jpeg', alt:'A hall of wooden chairs facing a raised aisle'},
+      {src:'photos/biennale3.jpeg', alt:'Faceless mannequins draped in scarves and robes'},
+      {src:'photos/biennale4.jpeg', alt:'A dark gallery room with framed paintings'},
+      {src:'photos/biennale5.jpeg', alt:'Weathered green and teal panels hanging from the ceiling'}
+    ]},
+    {date:'april25-april26', title:'Christ Archives', note:'everywhere', ratio:'1/1', media:[
+      {src:'photos/christ1.jpeg', alt:'A walk outside'},
+      {src:'photos/christ2.jpeg', alt:'A walk outside'},
+      {src:'photos/christ3.jpeg', alt:'A walk outside'},
+      {src:'photos/christ4.jpeg', alt:'A walk outside'},
+      {src:'photos/christ5.jpeg', alt:'A walk outside'},
+      {src:'photos/christ6.jpeg', alt:'A walk outside'},
+      {src:'photos/christ7.jpeg', alt:'A walk outside'},
+      {src:'photos/christ8.jpeg', alt:'A walk outside'},
+    ]},
+    {date:'april 2026', title:'blue hour', note:'light', ratio:'2/3', media:[
+      {src:'photos/photo-04.jpg', alt:'Blue hour light'}
+    ]},
+    {date:'april 2026', title:'running into sam', note:'people', ratio:'5/4', media:[
+      {src:'photos/photo-05.jpg', alt:'A passing moment with a friend'}
+    ]},
+    {date:'april 2026', title:'golden hour', note:'street', ratio:'3/2', media:[
+      {src:'photos/photo-06.jpg', alt:'Golden hour on the street'}
+    ]},
+    {date:'may 2026', title:'dinner attempt', note:'kitchen', ratio:'4/5', media:[
+      {src:'photos/photo-07.jpg', alt:'An experimental dinner'}
+    ]},
+    {date:'august 2025', title:'Goan Trip', note:'fun-day', ratio:'1/1', media:[
+      {src:'photos/Goa (1).jpeg', alt:'A small thing found in the garden'},
+      {src:'photos/Goa (2).jpeg', alt:'A small thing found in the garden'},
+      {src:'photos/Goa (3).jpeg', alt:'A small thing found in the garden'},
+      {src:'photos/Goa (4).jpeg', alt:'A small thing found in the garden'},
+      {src:'photos/Goa (5).jpeg', alt:'A small thing found in the garden'},
+      {src:'photos/Goa (6).jpeg', alt:'A small thing found in the garden'},
+      {src:'photos/Goa (7).jpeg', alt:'A small thing found in the garden'},
+      {src:'photos/Goa (8).jpeg', alt:'A small thing found in the garden'},
+    ]},
+    {date:'june 2026', title:'on the way', note:'motion', ratio:'3/4', media:[
+      {src:'photos/photo-09.jpg', alt:'A view from the way somewhere'}
+    ]},
+    {date:'june 2026', title:'things i keep', note:'objects', ratio:'4/3', media:[
+      {src:'photos/photo-10.jpg', alt:'A collection of small objects'}
+    ]},
+    {date:'july 2026', title:'open window', note:'afternoon', ratio:'2/3', media:[
+      {src:'photos/photo-11.jpg', alt:'Light through an open window'}
+    ]},
+    {date:'august 2026', title:'current view', note:'archive', ratio:'4/5', media:[
+      {src:'photos/photo-12.jpg', alt:'The current view'}
+    ]}
+  ];
+
+  // fill in any missing `tone` from the palette, cycling by index
+  photoItems.forEach((item,i)=>{
+    if(!item.tone) item.tone = TONE_PALETTE[i % TONE_PALETTE.length];
+  });
+
+  // detect video files by extension so the right element (<img> vs <video>) is used
+  function isVideoSrc(src){ return /\.(mp4|webm|mov|m4v|ogv)(\?.*)?$/i.test(src); }
+
+  // builds the actual <img> or <video> element for a media object
+  function createMediaEl(item){
+    if(isVideoSrc(item.src)){
+      const v = document.createElement('video');
+      v.src = item.src;
+      v.muted = true;
+      v.defaultMuted = true;
+      v.setAttribute('muted', '');
+      v.loop = true;
+      v.playsInline = true;
+      v.autoplay = true;
+      v.preload = 'auto';
+      v.setAttribute('aria-label', item.alt || '');
+      return v;
+    }
+    const img = document.createElement('img');
+    img.src = item.src;
+    img.alt = item.alt || '';
+    img.loading = 'lazy';
+    return img;
+  }
+
+  // reads the media's real width/height once it's available and applies it
+  // to the frame as --ratio, so the frame always matches the upload's shape
+  function applyNativeRatio(frame, el){
+    const set = (w,h)=>{ if(w && h) frame.style.setProperty('--ratio', `${w} / ${h}`); };
+    if(el.tagName === 'IMG'){
+      if(el.complete && el.naturalWidth){
+        set(el.naturalWidth, el.naturalHeight);
+        frame.classList.remove('empty');
+      } else {
+        el.addEventListener('load', ()=>{ set(el.naturalWidth, el.naturalHeight); frame.classList.remove('empty'); });
+        el.addEventListener('error', ()=>{ el.remove(); frame.classList.add('empty'); }, {once:true});
+      }
+    } else if(el.tagName === 'VIDEO'){
+      if(el.readyState >= 1 && el.videoWidth){
+        set(el.videoWidth, el.videoHeight);
+        frame.classList.remove('empty');
+      } else {
+        el.addEventListener('loadedmetadata', ()=>{ set(el.videoWidth, el.videoHeight); frame.classList.remove('empty'); });
+        el.addEventListener('error', ()=>{ el.remove(); frame.classList.add('empty'); }, {once:true});
+      }
+    }
+  }
+
+  const frameCountEl = document.getElementById('frameCount');
+  if(frameCountEl) frameCountEl.textContent = `${photoItems.length} frame${photoItems.length===1?'':'s'} · visual log`;
+
+  // Videos were autoplaying and decoding continuously the moment they were
+  // inserted into the grid, whether or not they were ever scrolled into
+  // view — with several clips that's real, ongoing CPU/GPU work for
+  // nothing on-screen. This single shared observer plays a video only
+  // while its card is actually visible and pauses it otherwise.
+  const mediaVisibilityObserver = window.IntersectionObserver
+    ? new IntersectionObserver(entries=>{
+        entries.forEach(entry=>{
+          const v = entry.target;
+          if(entry.isIntersecting) v.play && v.play().catch(()=>{});
+          else v.pause && v.pause();
+        });
+      }, {threshold:0.1})
+    : null;
+
+  const photoGrid = document.getElementById('photoGrid');
+  photoItems.forEach((item,index)=>{
+    const card = document.createElement('article');
+    card.className = 'project-card';
+    card.tabIndex = 0;
+    card.setAttribute('role','button');
+    card.setAttribute('aria-label', `${item.title}, ${item.date}`);
+    card.innerHTML = `
+      <div class="photo-frame empty" style="--tone:${item.tone};--ratio:${item.ratio || '4/5'}" data-label="${item.title}">
+        <span class="empty-label lower">add photo</span>
+        <button class="card-action" type="button" aria-label="view photo">view <span aria-hidden="true">↗</span></button>
+      </div>
+      <div class="card-info">
+        <time class="card-date lower">${item.date}</time>
+        <span class="card-title lower">${item.title}</span>
+        <span class="card-note lower">${item.note}</span>
+      </div>`;
+    const frame = card.querySelector('.photo-frame');
+    const action = card.querySelector('.card-action');
+    const mediaEl = createMediaEl(item.media[0]);
+    frame.insertBefore(mediaEl, frame.firstChild);
+    applyNativeRatio(frame, mediaEl);
+    if(mediaEl.tagName === 'VIDEO' && mediaVisibilityObserver){
+      mediaEl.autoplay = false;
+      mediaEl.removeAttribute('autoplay');
+      mediaVisibilityObserver.observe(mediaEl);
+    }
+    action.addEventListener('click',event=>{event.stopPropagation();openLB(index)});
+    card.addEventListener('click',()=>openLB(index));
+    card.addEventListener('keydown',event=>{
+      if(event.key === 'Enter' || event.key === ' '){event.preventDefault();openLB(index)}
+    });
+    card.addEventListener('pointermove',event=>{
+      if(event.pointerType === 'touch') return;
+      const rect = frame.getBoundingClientRect();
+      const px = Math.max(-0.5, Math.min(0.5, (event.clientX - rect.left) / rect.width - 0.5));
+      const py = Math.max(-0.5, Math.min(0.5, (event.clientY - rect.top) / rect.height - 0.5));
+      card.style.setProperty('--mx', (px * 26).toFixed(2) + 'px');
+      card.style.setProperty('--my', (py * 26).toFixed(2) + 'px');
+      card.style.setProperty('--ry', (px * 10).toFixed(2) + 'deg');
+      card.style.setProperty('--rx', (py * -10).toFixed(2) + 'deg');
+    });
+    card.addEventListener('pointerleave',()=>{
+      card.style.setProperty('--mx','0px');
+      card.style.setProperty('--my','0px');
+      card.style.setProperty('--rx','0deg');
+      card.style.setProperty('--ry','0deg');
+    });
+    photoGrid.appendChild(card);
+  });
+
+  // ---------- Igloo-brick reactive tilt ----------
+  // https://www.igloo.inc/'s hero has its ice-block "bricks" constantly
+  // drifting loose and leaning based on where you're looking, rather than
+  // sitting as a rigid static structure. This is the flat-grid equivalent:
+  // a page-wide cursor-proximity lean layered onto every tile's existing
+  // --base-ry (fixed inward lean) and --rx/--ry (direct-hover parallax)
+  // via new --grx/--gry vars, so the whole wall subtly reacts to the
+  // pointer even when it's nowhere near a given tile — same size, same
+  // grid position, just alive. Skipped entirely on touch devices (no
+  // hovering pointer to react to) and under prefers-reduced-motion.
+  if(!window.matchMedia('(pointer:coarse)').matches &&
+     !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    const reactFrames = Array.from(photoGrid.querySelectorAll('.photo-frame'));
+    const falloff = 480;   // px radius of influence around the pointer
+    const maxTilt = 7;     // deg of lean at zero distance
+    let reactRaf = null, reactMouseX = -9999, reactMouseY = -9999;
+
+    const applyReactiveTilt = ()=>{
+      reactRaf = null;
+      reactFrames.forEach(frame=>{
+        const rect = frame.getBoundingClientRect();
+        const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+        const dx = reactMouseX - cx, dy = reactMouseY - cy;
+        const dist = Math.hypot(dx, dy);
+        const strength = Math.max(0, 1 - dist/falloff);
+        if(strength <= 0){
+          frame.closest('.project-card').style.setProperty('--grx','0deg');
+          frame.closest('.project-card').style.setProperty('--gry','0deg');
+          return;
+        }
+        const gry = Math.max(-maxTilt, Math.min(maxTilt, (dx/falloff) * -maxTilt * strength));
+        const grx = Math.max(-maxTilt, Math.min(maxTilt, (dy/falloff) * maxTilt * strength));
+        frame.closest('.project-card').style.setProperty('--gry', gry.toFixed(2)+'deg');
+        frame.closest('.project-card').style.setProperty('--grx', grx.toFixed(2)+'deg');
+      });
+    };
+
+    window.addEventListener('mousemove', event=>{
+      reactMouseX = event.clientX; reactMouseY = event.clientY;
+      if(!reactRaf) reactRaf = requestAnimationFrame(applyReactiveTilt);
+    }, {passive:true});
+
+    document.addEventListener('mouseleave', ()=>{
+      reactFrames.forEach(frame=>{
+        frame.closest('.project-card').style.setProperty('--grx','0deg');
+        frame.closest('.project-card').style.setProperty('--gry','0deg');
+      });
+    });
+  }
+
+  let lbIndex = 0;
+  let lbMediaIndex = 0;
+  const lb = document.getElementById('lightbox');
+  const lbFrame = document.getElementById('lbFrame');
+  const lbCap = document.getElementById('lbCap');
+  const lbCount = document.getElementById('lbCount');
+
+  // WebGL morph engine (ogl + gsap, defined in the module script below) —
+  // created lazily on first use so a WebGL context isn't spun up until
+  // someone actually opens the lightbox. `morphEngine` stays `undefined`
+  // until the first attempt, then is either the instance or `false`.
+  let morphEngine;
+  function getMorphEngine(){
+    if(morphEngine === undefined){
+      try{
+        morphEngine = (typeof window.__LightboxMorph === 'function')
+          ? new window.__LightboxMorph(lbFrame, {
+              transition:'melt', intensity:0.55, scale:2.4, aberration:0.35, drift:0.4, overlayColor:'#05060a'
+            })
+          : false;
+      } catch(e){ morphEngine = false; }
+    }
+    return morphEngine || null;
+  }
+
+  // Same "contain" math the CSS uses (max-width:min(560px,90vw), max-height:
+  // 70vh, never upscale) so the animated resize lands exactly where a plain
+  // <img> would have settled on its own.
+  function fitBox(natW, natH){
+    const maxW = Math.min(560, window.innerWidth * 0.9);
+    const maxH = window.innerHeight * 0.70;
+    const scale = Math.min(1, maxW / natW, maxH / natH);
+    return { w: natW * scale, h: natH * scale };
+  }
+
+  let morphBusy = false;
+  let lbLoadToken = 0;
+
+  function renderLB(){
+    // Guards BOTH transition paths below. Previously only the WebGL path
+    // set morphBusy, so spamming next/prev during the plain (video)
+    // cross-dissolve could fire this function again before its
+    // setTimeout-deferred insertNew had run — each call captured its own
+    // stale `old` reference and inserted another element without ever
+    // removing the others, which is what left multiple photos stacked on
+    // screen. Blocking re-entry here for both paths fixes that.
+    if(morphBusy) return;
+
+    const item = photoItems[lbIndex];
+    const mediaItem = item.media[lbMediaIndex];
+    lbCap.textContent = `${item.date} — ${item.title} · ${item.note}`;
+    lbFrame.style.setProperty('--tone', item.tone);
+    lbFrame.dataset.label = item.title;
+    lbCount.textContent = item.media.length > 1 ? `${lbMediaIndex + 1} / ${item.media.length}` : '';
+
+    const old = lbFrame.querySelector('img,video');
+
+    const insertNew = ()=>{
+      // Previously cleared 'has-image' here, which reveals the "add this
+      // photo" placeholder text underneath for a beat — barely noticeable
+      // for images (load fires almost instantly from cache) but very
+      // visible for video, since loadedmetadata lags behind insertion.
+      // The frame already has content up to this exact point, so just
+      // leave the class alone; only the error handler below should ever
+      // turn it off.
+      lbFrame.querySelectorAll('img,video').forEach(node => node.remove());
+      // A fresh attempt is starting — any "missing" state from a previous
+      // (failed) item shouldn't bleed into this one while it loads.
+      lbFrame.classList.remove('lb-missing');
+
+      const el = createMediaEl(mediaItem);
+      if(el.tagName === 'VIDEO'){ el.muted = true; }
+      el.classList.add('lb-morphing');
+      lbFrame.insertBefore(el, lbFrame.firstChild);
+      applyNativeRatio(lbFrame, el);
+
+      // Some hosting setups (an SPA-style catch-all route, a CDN that
+      // 200s every missing path with its index page, etc.) return a
+      // response for a bad src instead of a real 404 — the element then
+      // never gets valid media to decode but ALSO never fires a proper
+      // 'error', so it can sit "loading" forever with nothing to tell the
+      // visitor anything is wrong. This is the backstop: if nothing has
+      // resolved either way within a few seconds, treat it as missing.
+      const myToken = ++lbLoadToken;
+      const stuckTimer = setTimeout(()=>{
+        if(myToken !== lbLoadToken) return; // superseded by a newer item
+        lbFrame.classList.remove('has-image');
+        lbFrame.classList.add('lb-missing');
+      }, 7000);
+
+      const reveal = ()=>{
+        clearTimeout(stuckTimer);
+        lbFrame.classList.add('has-image');
+        requestAnimationFrame(()=>el.classList.remove('lb-morphing'));
+      };
+      if(el.complete && el.naturalWidth) reveal();
+      el.addEventListener('load', reveal);
+      el.addEventListener('loadedmetadata', reveal);
+      el.addEventListener('error', ()=>{
+        clearTimeout(stuckTimer);
+        lbFrame.classList.remove('has-image');
+        lbFrame.classList.add('lb-missing');
+      }, {once:true});
+
+      morphBusy = false;
+    };
+
+    // WebGL morph only between two different still images, and only once
+    // something is already showing (nothing to morph from on first open).
+    // Video stays on the plain blur cross-dissolve below.
+    const engine = getMorphEngine();
+    const canMorph = engine && old && old.tagName === 'IMG'
+      && !isVideoSrc(mediaItem.src) && old.getAttribute('src') !== mediaItem.src;
+
+    morphBusy = true;
+
+    if(canMorph){
+      const fromSrc = old.getAttribute('src');
+      const rect = old.getBoundingClientRect();
+      lbFrame.style.width = rect.width + 'px';
+      lbFrame.style.height = rect.height + 'px';
+      old.style.opacity = '0';
+      old.style.position = 'absolute';
+
+      engine.run({ fromSrc, toSrc: mediaItem.src, fitBox, duration: 1.1 }).then(ok=>{
+        if(!ok){
+          // texture failed to load — fall back to the plain cross-dissolve
+          old.style.opacity = '';
+          old.style.position = '';
+          old.classList.add('lb-morphing');
+          setTimeout(insertNew, 260);
+          return;
+        }
+        lbFrame.style.width = '';
+        lbFrame.style.height = '';
+        insertNew();
+      });
+      return;
+    }
+
+    // Fallback: dissolve the outgoing photo through a soft blur before
+    // swapping in the next one (used for videos, first open, and if the
+    // WebGL engine isn't available).
+    if(old){
+      old.classList.add('lb-morphing');
+      setTimeout(insertNew, 260);
+    } else {
+      insertNew();
+    }
+  }
+  function openLB(i){lbIndex=i;lbMediaIndex=0;renderLB();lb.classList.add('open');document.body.style.overflow='hidden'}
+  function stepLB(dir){
+    if(morphBusy) return;
+    const item = photoItems[lbIndex];
+    lbMediaIndex = (lbMediaIndex + dir + item.media.length) % item.media.length;
+    renderLB();
+  }
+  function closeLB(){lb.classList.remove('open');document.body.style.overflow=''}
+  function lbBackdrop(event){if(event.target.id==='lightbox')closeLB()}
+
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')closeLB()});
+</script>
+<script type="module">
+// ---------- WebGL morph transition for the lightbox ----------
+// Ported from React Bits' MorphSlider (ogl + gsap), adapted for a
+// single-photo viewer instead of a fixed-box carousel:
+//  - "contain"-fit per image (never crops), not "cover"-fit
+//  - the frame's own box is tweened to the incoming photo's size on the
+//    SAME timeline as the shader progress, instead of letting a separate
+//    CSS aspect-ratio transition fight the opacity/blur cross-dissolve —
+//    that fight (size changing on one clock, color changing on another)
+//    was the actual source of the old jitter/instability, not the shader.
+//  - only used image→image; video stays on the old blur cross-dissolve,
+//    since morphing live video frames through a shader is a different,
+//    much heavier problem than this needed to solve.
+// Loaded as a module so it can import straight from esm CDNs — the rest
+// of the page's scripts are untouched classic scripts.
+import { Renderer, Triangle, Program, Mesh, Texture } from 'https://cdn.jsdelivr.net/npm/ogl@1/+esm';
+import { gsap } from 'https://cdn.jsdelivr.net/npm/gsap@3/+esm';
+
+const TRANSITIONS = { melt: 0, ripple: 1, shear: 2, swirl: 3 };
+
+const vertexShader = `
+attribute vec2 position;
+attribute vec2 uv;
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
+
+const fragmentShader = `
+precision highp float;
+
+uniform sampler2D tCurrent;
+uniform sampler2D tNext;
+uniform vec2 uResolution;
+uniform vec2 uCurrentSize;
+uniform vec2 uNextSize;
+uniform float uProgress;
+uniform int uMode;
+uniform float uIntensity;
+uniform float uScale;
+uniform float uAberration;
+uniform float uDrift;
+uniform float uTime;
+uniform float uReduce;
+uniform vec2 uPointer;
+uniform vec3 uOverlay;
+
+varying vec2 vUv;
+
+const float PI = 3.14159265359;
+
+float hash11(float p) {
+  p = fract(p * 0.1031);
+  p *= p + 33.33;
+  p *= p + p;
+  return fract(p);
+}
+
+float hash21(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float fbm(vec2 p) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 5; i++) {
+    v += a * noise(p);
+    p *= 2.0;
+    a *= 0.5;
+  }
+  return v;
+}
+
+mat2 rot(float a) {
+  float s = sin(a);
+  float c = cos(a);
+  return mat2(c, -s, s, c);
+}
+
+// "Cover" fit: sample coordinates so the frame is filled edge-to-edge,
+// cropping whichever axis overflows — this is what the reference
+// MorphSlider uses, and what makes the melt read as one continuous liquid
+// surface instead of a letterboxed image floating in empty space.
+vec2 coverUV(vec2 uv, vec2 res, vec2 img) {
+  float rA = res.x / max(res.y, 1.0);
+  float iA = img.x / max(img.y, 1.0);
+  vec2 s = vec2(1.0);
+  float ratio = rA / max(iA, 0.0001);
+  if (ratio > 1.0) {
+    s.y = 1.0 / ratio;
+  } else {
+    s.x = ratio;
+  }
+  return (uv - 0.5) * s + 0.5;
+}
+
+void main() {
+  float p = clamp(uProgress, 0.0, 1.0);
+  float env = sin(p * PI);
+
+  vec2 uv = vUv;
+
+  uv += vec2(sin(uTime * 0.25 + uv.y * 4.0), cos(uTime * 0.22 + uv.x * 4.0)) * uDrift * 0.008;
+  uv = (uv - 0.5) * (1.0 - uDrift * 0.02 * sin(uTime * 0.4)) + 0.5;
+
+  vec2 uvC = uv;
+  vec2 uvN = uv;
+  float m = smoothstep(0.0, 1.0, p);
+
+  if (uReduce < 0.5) {
+    if (uMode == 3) {
+      vec2 c = uv - 0.5;
+      float r = length(c);
+      float ang = env * uIntensity * 3.5 * (1.0 - r);
+      uvC = rot(ang) * c + 0.5;
+      uvN = rot(-ang) * c + 0.5;
+      m = smoothstep(0.0, 1.0, p);
+    } else if (uMode == 1) {
+      float d = distance(uv, uPointer);
+      float ring = p * 1.6;
+      float wave = sin((d - ring) * 30.0) * env;
+      vec2 dir = normalize(uv - uPointer + 1e-4);
+      vec2 disp = dir * wave * uIntensity * 0.25;
+      uvC = uv + disp;
+      uvN = uv + disp * 0.6;
+      m = 1.0 - smoothstep(ring - 0.03, ring + 0.03, d);
+    } else if (uMode == 2) {
+      float slices = 14.0;
+      float row = floor(uv.y * slices);
+      float rnd = hash11(row);
+      vec2 disp = vec2((rnd - 0.5) * env * uIntensity * 0.6, 0.0);
+      uvC = uv + disp;
+      uvN = uv + disp;
+      float th = p * 1.5 - 0.25 + (rnd - 0.5) * 0.25;
+      m = 1.0 - smoothstep(th - 0.06, th + 0.06, uv.x);
+    } else {
+      // "melt": a liquid coordinate warp that peaks mid-transition (env)
+      // and relaxes back to zero at both ends, layered UNDER a plain
+      // uniform crossfade. This used to gate the reveal itself by a noise
+      // threshold (smoothstep(nn±0.15, p)) — since fbm output clusters
+      // tightly around its mean, nearly every pixel crossed its threshold
+      // within the same narrow slice of p, so the whole image flipped
+      // almost at once instead of melting. A uniform mask fixes that:
+      // every pixel fades on the exact same clock, and the warp only adds
+      // the liquid distortion on top — it no longer decides *when* a
+      // pixel reveals.
+      float nn = fbm(uv * uScale + uTime * 0.03);
+      float warp = fbm(uv * uScale * 1.7 - uTime * 0.02);
+      vec2 g = vec2(nn, warp) - 0.5;
+      uvC = uv + g * uIntensity * 0.5 * env;
+      uvN = uv - g * uIntensity * 0.5 * env;
+      m = smoothstep(0.0, 1.0, p);
+    }
+  }
+
+  vec2 sC = coverUV(uvC, uResolution, uCurrentSize);
+  vec2 sN = coverUV(uvN, uResolution, uNextSize);
+
+  float ca = uReduce < 0.5 ? uAberration * env * 0.05 : 0.0;
+
+  vec3 colC = vec3(
+    texture2D(tCurrent, sC + vec2(ca, 0.0)).r,
+    texture2D(tCurrent, sC).g,
+    texture2D(tCurrent, sC - vec2(ca, 0.0)).b
+  );
+  vec3 colN = vec3(
+    texture2D(tNext, sN + vec2(ca, 0.0)).r,
+    texture2D(tNext, sN).g,
+    texture2D(tNext, sN - vec2(ca, 0.0)).b
+  );
+
+  vec3 col = mix(colC, colN, m);
+
+  float vig = smoothstep(1.25, 0.25, length(uv - 0.5));
+  col = mix(col, uOverlay, (1.0 - vig) * 0.28);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+function hexToRgb(hex) {
+  let h = (hex || '#000000').replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+// One shared texture cache (keyed by src) so stepping back and forth
+// between photos already viewed doesn't re-decode them.
+const textureCache = new Map();
+function loadTexture(gl, src) {
+  if (textureCache.has(src)) return textureCache.get(src);
+  const p = new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const texture = new Texture(gl, {
+        generateMipmaps: false,
+        wrapS: gl.CLAMP_TO_EDGE,
+        wrapT: gl.CLAMP_TO_EDGE
+      });
+      texture.image = img;
+      resolve({ texture, size: [img.naturalWidth || 1, img.naturalHeight || 1] });
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+  textureCache.set(src, p);
+  return p;
+}
+
+class LightboxMorph {
+  constructor(container, opts = {}) {
+    this.container = container;
+    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    this.renderer = new Renderer({
+      alpha: true,
+      antialias: true,
+      dpr: Math.min(window.devicePixelRatio || 1, 2)
+    });
+    this.gl = this.renderer.gl;
+    this.gl.clearColor(0, 0, 0, 0);
+    this.canvas = this.gl.canvas;
+    this.canvas.className = 'lb-morph-canvas';
+
+    this.geometry = new Triangle(this.gl);
+    this.program = new Program(this.gl, {
+      vertex: vertexShader,
+      fragment: fragmentShader,
+      uniforms: {
+        tCurrent: { value: null },
+        tNext: { value: null },
+        uResolution: { value: [1, 1] },
+        uCurrentSize: { value: [1, 1] },
+        uNextSize: { value: [1, 1] },
+        uProgress: { value: 0 },
+        uMode: { value: TRANSITIONS[opts.transition] ?? 0 },
+        uIntensity: { value: opts.intensity ?? 0.55 },
+        uScale: { value: opts.scale ?? 2.4 },
+        uAberration: { value: opts.aberration ?? 0.35 },
+        uDrift: { value: opts.drift ?? 0.4 },
+        uTime: { value: 0 },
+        uReduce: { value: this.reducedMotion ? 1 : 0 },
+        uPointer: { value: [0.5, 0.5] },
+        uOverlay: { value: hexToRgb(opts.overlayColor || '#17151c') }
+      }
+    });
+    this.mesh = new Mesh(this.gl, { geometry: this.geometry, program: this.program });
+
+    this.raf = null;
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(container);
+  }
+
+  resize() {
+    const rect = this.container.getBoundingClientRect();
+    const w = Math.max(rect.width, 1);
+    const h = Math.max(rect.height, 1);
+    this.renderer.setSize(w, h);
+    this.program.uniforms.uResolution.value = [this.gl.canvas.width, this.gl.canvas.height];
+  }
+
+  attach() {
+    if (this.canvas.parentNode !== this.container) {
+      this.container.insertBefore(this.canvas, this.container.firstChild);
+    }
+    this.resize();
+  }
+
+  detach() {
+    if (this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
+  }
+
+  loop(t) {
+    this.program.uniforms.uTime.value = t * 0.001;
+    this.renderer.render({ scene: this.mesh });
+    this.raf = requestAnimationFrame(this.loop.bind(this));
+  }
+  startLoop() { if (!this.raf) this.raf = requestAnimationFrame(this.loop.bind(this)); }
+  stopLoop() { if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; } }
+
+  // Morphs the container from fromSrc to toSrc. `fitBox(natW, natH)` returns
+  // the {w,h} the container should end up at once viewing (uncropped —
+  // same contain-fit rule as the CSS). Two phases:
+  //   1. the frame stays at its CURRENT size the whole time; both photos
+  //      cover-fit (crop to fill) that stable box while the shader melts
+  //      between them — same as the reference component, where the slide
+  //      area is a fixed box and photos fill it edge to edge.
+  //   2. once the color settles, a quick resize to the incoming photo's
+  //      real, uncropped box, then the plain <img> takes back over.
+  // Size and color used to change on the same clock, which meant the
+  // frame's edges (and the crop) were shifting *while* the shader was
+  // blending — that reads as flicker, not a size change is why splitting
+  // these into two clean phases matters.
+  async run({ fromSrc, toSrc, fitBox, duration = 1.0, settle = 0.18, ease = 'power2.inOut' }) {
+    const gl = this.gl;
+    const [a, b] = await Promise.all([loadTexture(gl, fromSrc), loadTexture(gl, toSrc)]);
+    if (!a || !b) return false;
+
+    this.program.uniforms.tCurrent.value = a.texture;
+    this.program.uniforms.uCurrentSize.value = a.size;
+    this.program.uniforms.tNext.value = b.texture;
+    this.program.uniforms.uNextSize.value = b.size;
+    this.program.uniforms.uProgress.value = 0;
+
+    this.attach();
+    this.startLoop();
+
+    const target = fitBox(b.size[0], b.size[1]);
+    const morphDur = this.reducedMotion ? Math.min(duration, 0.3) : duration;
+    const settleDur = this.reducedMotion ? 0.001 : settle;
+    const startRect = this.container.getBoundingClientRect();
+    const size = { w: startRect.width, h: startRect.height };
+    const applySize = () => {
+      this.container.style.width = size.w + 'px';
+      this.container.style.height = size.h + 'px';
+    };
+
+    await new Promise(resolve => {
+      const tl = gsap.timeline({ onComplete: resolve });
+      tl.to(this.program.uniforms.uProgress, { value: 1, duration: morphDur, ease });
+      tl.to(size, { w: target.w, h: target.h, duration: settleDur, ease: 'power2.inOut', onUpdate: applySize }, '>');
+    });
+
+    this.stopLoop();
+    this.detach();
+    return true;
+  }
+}
+
+window.__LightboxMorph = LightboxMorph;
+</script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script>
+// ---------- Color Bends background ----------
+// Full-screen shader plane rendered with three.js (already a dependency for
+// the hobbies graph below), using the same param interface React Bits'
+// Color Bends exposes: color(s), speed, frequency, noise, bandWidth,
+// rotation, fadeTop, iterations, intensity. Domain-warped UVs feed a
+// cosine colour palette (Inigo Quilez's palette technique) so bands blend
+// continuously into one another — no hard edges, no per-frame flashing.
+(function colorBends(){
+  // Disabled now that goodlife.mp4 is the page background — everything
+  // below is left intact (not deleted) so this is a one-line revert
+  // (plus the #colorBends display:none in the CSS above) if the shader
+  // background comes back later.
+  const DISABLED = true;
+  if(DISABLED) return;
+  const canvas = document.getElementById('colorBends');
+  if(!canvas || typeof THREE === 'undefined') return;
+  let renderer;
+  try{
+    renderer = new THREE.WebGLRenderer({canvas, antialias:false, alpha:false});
+  }catch(e){ return; } // no WebGL — the CSS gradient fallback stays visible
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  renderer.setPixelRatio(DPR);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+
+  const uniforms = {
+    uTime:        {value:0},
+    uResolution:  {value:new THREE.Vector2(1,1)},
+    uSpeed:       {value:0.16},
+    uRotation:    {value:0.5},   // radians
+    uScale:       {value:1.6},
+    uFrequency:   {value:1.15},
+    uWarpStrength:{value:0.55},
+    uBandWidth:   {value:0.5},
+    uIterations:  {value:3},
+    uIntensity:   {value:1.05},
+    uNoise:       {value:0.035},
+    uFadeTop:     {value:0.8},
+    // Cosine-palette coefficients tuned to stay entirely within the violet
+    // family (indigo -> violet -> orchid magenta -> pale lavender) as it
+    // cycles, instead of swinging out into blue/gold.
+    uPalA:{value:new THREE.Vector3(0.30,0.16,0.42)},
+    uPalB:{value:new THREE.Vector3(0.24,0.10,0.28)},
+    uPalC:{value:new THREE.Vector3(1.0,1.0,1.0)},
+    uPalD:{value:new THREE.Vector3(0.02,0.08,0.0)}
+  };
+
+  const material = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader:`
+      varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        gl_Position = vec4(position, 1.0);
+      }
+    `,
+    fragmentShader:`
+      precision highp float;
+      varying vec2 vUv;
+      uniform float uTime, uSpeed, uRotation, uScale, uFrequency, uWarpStrength,
+                    uBandWidth, uIntensity, uNoise, uFadeTop;
+      uniform int uIterations;
+      uniform vec2 uResolution;
+      uniform vec3 uPalA, uPalB, uPalC, uPalD;
+
+      float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123); }
+      float valueNoise(vec2 p){
+        vec2 i = floor(p), f = fract(p);
+        float a = hash(i), b = hash(i+vec2(1.0,0.0));
+        float c = hash(i+vec2(0.0,1.0)), d = hash(i+vec2(1.0,1.0));
+        vec2 u = f*f*(3.0-2.0*f);
+        return mix(a,b,u.x) + (c-a)*u.y*(1.0-u.x) + (d-b)*u.x*u.y;
+      }
+      vec2 rotate(vec2 p, float a){
+        float s = sin(a), c = cos(a);
+        return mat2(c,-s,s,c) * p;
+      }
+      vec3 palette(float t){
+        return uPalA + uPalB * cos(6.28318 * (uPalC * t + uPalD));
+      }
+
+      void main(){
+        vec2 aspect = vec2(uResolution.x/uResolution.y, 1.0);
+        vec2 uv = (vUv - 0.5) * aspect * uScale;
+        uv = rotate(uv, uRotation);
+        float t = uTime * uSpeed;
+
+        vec2 warp = uv;
+        for(int i=0;i<6;i++){
+          if(i >= uIterations) break;
+          float fi = float(i+1);
+          warp += (uWarpStrength/fi) * vec2(
+            sin(warp.y*uFrequency*fi + t*fi*1.3),
+            cos(warp.x*uFrequency*fi - t*fi*1.1)
+          );
+        }
+
+        float bendPhase = (warp.x + warp.y) * uFrequency * 0.5 + t*0.4;
+        float bandGate = smoothstep(0.0, uBandWidth, fract(bendPhase))
+                        * smoothstep(1.0, 1.0-uBandWidth, fract(bendPhase));
+
+        float colorPhase = (warp.x - warp.y) * 0.35 + t*0.22;
+        vec3 col = palette(colorPhase) * (0.55 + 0.55*bandGate) * uIntensity;
+
+        col += (valueNoise(vUv * uResolution * 0.6) - 0.5) * uNoise;
+
+        float fade = smoothstep(1.0, uFadeTop, vUv.y);
+        col *= mix(1.0, fade, 0.55);
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `
+  });
+
+  scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), material));
+
+  function resize(){
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    uniforms.uResolution.value.set(w, h);
+  }
+  resize();
+  window.addEventListener('resize', resize, {passive:true});
+
+  let raf = null, running = true;
+  function frame(now){
+    if(!running) return;
+    uniforms.uTime.value = now * 0.001;
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(frame);
+  }
+  function start(){ if(raf) cancelAnimationFrame(raf); running = true; raf = requestAnimationFrame(frame); }
+  function stop(){ running = false; if(raf) cancelAnimationFrame(raf); }
+
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden) stop(); else if(!reduceMotion) start();
+  });
+
+  if(reduceMotion){
+    // Render a single static frame instead of animating.
+    uniforms.uTime.value = 0;
+    renderer.render(scene, camera);
+  } else {
+    start();
+  }
+})();
+
+// ---------- Background video ----------
+// goodlife.mp4 replaces the Color Bends shader as the page background,
+// with sound. Browsers only guarantee autoplay when a video starts
+// muted, so: start muted (always works), immediately try to upgrade to
+// unmuted in case this session already has playback permission, and
+// otherwise wait for the entry screen's "press any key" gesture (or the
+// visible speaker button) to turn it on — so it doesn't fight the entry
+// screen's own voice line for the same first click.
+(function bgVideo(){
+  const video = document.getElementById('bgVideo');
+  const toggle = document.getElementById('audioToggle');
+  if(!video) return;
+
+  const setMuted = (muted) => {
+    video.muted = muted;
+    if(toggle){
+      toggle.classList.toggle('is-muted', muted);
+      toggle.setAttribute('aria-pressed', String(!muted));
+    }
+  };
+
+  setMuted(true);
+  video.play().catch(() => {});
+
+  const tryUnmuted = () => {
+    video.muted = false;
+    const p = video.play();
+    if(p && typeof p.catch === 'function'){
+      p.then(() => setMuted(false)).catch(() => setMuted(true));
+    } else {
+      setMuted(false);
+    }
+  };
+  tryUnmuted();
+
+  if(toggle){
+    toggle.addEventListener('click', () => {
+      if(video.muted){ setMuted(false); video.play().catch(() => {}); }
+      else{ setMuted(true); }
+    });
+  }
+
+  // Fires once the entry screen's voice line finishes and it fades out
+  // (or immediately, if there's no entry screen on the page).
+  document.addEventListener('introended', () => { if(video.muted) tryUnmuted(); }, {once:true});
+})();
+</script>
+<script src="https://unpkg.com/three-spritetext@1.6.5/dist/three-spritetext.min.js"></script>
+<script src="https://unpkg.com/3d-force-graph@1.70.10/dist/3d-force-graph.min.js"></script>
+<script>
+  (function(){
+    const el = document.getElementById('graph3d');
+    if(!el || typeof ForceGraph3D === 'undefined') return;
+
+    const INK = '#EDE7F2', MUTED = '#C3B6CF', ACCENT = '#C9977A', LINE = 'rgba(237,231,242,.16)';
+    const LABEL_COLOR = '#000000'; // hobby node label text (meshes and links are now black too, set directly below)
+    let seed = 42;
+    function rnd(){ seed = (seed*9301+49297)%233280; return seed/233280; }
+
+    const hobbies = [
+      { id:'reading',   desc:'obsessed with the idea of reading more' },
+      { id:'sketching', desc:'doodles in the margins of everything' },
+      { id:'gaming',    desc:'casual not very into it' },
+      { id:'hoarding',    desc:'collecting things, never knowing what to do with them' },
+      { id:'music',     desc:'discovering and collecting offline cuz streaming sucks' },
+      { id:'cooking',   desc:'occasional experiments in the kitchen' }
+    ];
+    const nodes = [{ id:'hub', group:'hub', val:9 }];
+    const links = [];
+    hobbies.forEach(h=>{
+      nodes.push({ id:h.id, label:h.id, desc:h.desc, group:'hobby', val:5 });
+      links.push({ source:'hub', target:h.id });
+    });
+
+    const satCount = 22;
+    for(let i=0; i<satCount; i++){
+      const id = 'sat'+i;
+      nodes.push({ id, group:'sat', val:1.1 + rnd()*0.6 });
+      const target = rnd() < 0.3 ? 'hub' : hobbies[Math.floor(rnd()*hobbies.length)].id;
+      links.push({ source:id, target, group:'sat' });
+    }
+    for(let i=0; i<14; i++){
+      const a = 'sat'+Math.floor(rnd()*satCount);
+      const b = 'sat'+Math.floor(rnd()*satCount);
+      if(a!==b) links.push({ source:a, target:b, group:'sat' });
+    }
+
+    const captionEl = document.getElementById('nodeCaption');
+    const ncName = document.getElementById('ncName');
+    const ncDesc = document.getElementById('ncDesc');
+    const branchEl = document.getElementById('hobbyBranch');
+    const branchPlaceholder = document.querySelector('.branch-placeholder');
+    let selectedNode = null;
+    let fitTimer = 0;
+    const FIT_ZOOM_IN = 0.62; // <1 pulls the camera in a bit tighter than the auto-fit distance — lower = closer/bigger
+
+    const Graph = ForceGraph3D()(el)
+      // Nodes start at random positions and the force simulation spreads
+      // them out over the first second or two of real time — which is
+      // what the "cluttered at first load" screenshot is catching: labels
+      // still overlapping mid-settle. Pre-running the simulation for a
+      // batch of ticks BEFORE the data is handed over (and so before the
+      // first frame is drawn) means the graph opens already in — or very
+      // close to — its settled layout instead of visibly untangling
+      // itself in front of the visitor.
+      .warmupTicks(60)
+      .graphData({ nodes, links })
+      .backgroundColor('rgba(0,0,0,0)')
+      .showNavInfo(false)
+      .nodeThreeObjectExtend(false)
+      .nodeThreeObject(node=>{
+        const group = new THREE.Group();
+        const isHub = node.group === 'hub';
+        const isHobby = node.group === 'hobby';
+        const radius = isHub ? 5 : isHobby ? 3.2 : 1.2;
+        const color = '#000000';
+        const geo = new THREE.SphereGeometry(radius, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:isHobby||isHub?1:0.55 });
+        const mesh = new THREE.Mesh(geo, mat);
+        group.add(mesh);
+        if(isHobby){
+          const hitGeo = new THREE.SphereGeometry(10, 12, 12);
+          const hitMat = new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});
+          group.add(new THREE.Mesh(hitGeo, hitMat));
+          const sprite = new SpriteText(node.label);
+          sprite.material.depthWrite = false;
+          sprite.color = LABEL_COLOR;
+          sprite.fontFace = 'Fraunces, Georgia, serif';
+          sprite.fontWeight = '400';
+          sprite.textHeight = 5.2;
+          sprite.padding = 1;
+          sprite.position.set(0, 7, 0);
+          group.add(sprite);
+          node.__sprite = sprite;
+        }
+        node.__mesh = mesh;
+        return group;
+      })
+      .linkColor(link=> link.group==='sat' ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.55)')
+      .linkWidth(0.4)
+      .linkDirectionalParticles(link=> link.group==='sat' ? 0 : 2)
+      .linkDirectionalParticleWidth(1.1)
+      .linkDirectionalParticleSpeed(0.003)
+      .linkDirectionalParticleColor(()=> '#000000')
+      .onNodeHover(node=>{
+        el.style.cursor = node ? 'pointer' : 'grab';
+        if(node && node.__sprite){ node.__sprite.color = LABEL_COLOR; }
+      })
+      .onNodeClick(node=>{
+        if(node.group === 'hobby'){
+          selectedNode = node;
+          ncName.textContent = node.label;
+          ncDesc.textContent = node.desc;
+          captionEl.classList.add('show');
+          branchEl.classList.add('is-open');
+          branchPlaceholder.hidden = true;
+          const distance = 90;
+          const ratio = 1 + distance / Math.hypot(node.x||1, node.y||1, node.z||1);
+          Graph.cameraPosition(
+            { x:(node.x||0)*ratio, y:(node.y||0)*ratio, z:(node.z||0)*ratio },
+            node,
+            700
+          );
+        } else {
+          selectedNode = null;
+          captionEl.classList.remove('show');
+          branchEl.classList.remove('is-open');
+          branchPlaceholder.hidden = false;
+        }
+      });
+    Graph.controls().autoRotate = true;
+    Graph.controls().autoRotateSpeed = 0.35;
+    Graph.controls().addEventListener('start', ()=>{ Graph.controls().autoRotate = false; });
+
+    // The 3D graph runs its own WebGL render loop internally, and by
+    // default that loop never stops — it was rendering every frame even
+    // while scrolled completely out of view, which is expensive (a full
+    // WebGL scene with particle-animated links) and a major contributor
+    // to the page feeling laggy. Pause/resume it based on real visibility.
+    if(window.IntersectionObserver){
+      new IntersectionObserver(entries=>{
+        entries.forEach(entry=>{
+          if(entry.isIntersecting) Graph.resumeAnimation();
+          else Graph.pauseAnimation();
+        });
+      }, {threshold:0}).observe(el);
+    }
+
+    Graph.d3Force('charge').strength(-48);
+    Graph.d3Force('link').distance(link=> link.group==='sat' ? 34 : 72);
+
+    let lastFitW = 0, lastFitH = 0;
+    function fitGraph(){
+      const camera = Graph.camera && Graph.camera();
+      if(!camera){ Graph.zoomToFit(700, 30); return; }
+      // Snap instantly to the library's own auto-fit distance (no visible
+      // tween — happens before the next paint), then animate smoothly from
+      // there to a slightly closer target. That way there's exactly one
+      // camera move to watch, not a fit-in followed by a separate pop.
+      Graph.zoomToFit(0, 30);
+      const target = camera.position.clone().multiplyScalar(FIT_ZOOM_IN);
+      Graph.cameraPosition(target, undefined, 700);
+    }
+    function resize(){
+      const w = el.clientWidth, h = el.clientHeight;
+      Graph.width(w).height(h);
+      // Skip re-fitting (and the camera move it triggers) if the container
+      // is still the same size — only an actual size change should move
+      // the camera.
+      if(w === lastFitW && h === lastFitH) return;
+      lastFitW = w; lastFitH = h;
+      window.clearTimeout(fitTimer);
+      fitTimer = window.setTimeout(fitGraph,120);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+    // Previously fitGraph() also ran again at 800ms AND 1700ms. Each call
+    // starts with an *instant* zoomToFit(0,30) that snaps the camera back
+    // to the library's raw auto-fit distance, interrupting whatever
+    // animated tween the previous call had in flight — three overlapping
+    // snap+ease cycles is exactly what read as the camera "pulsating" on
+    // load. A single fit, timed to run after the d3 force simulation has
+    // had a chance to cool and spread the nodes apart, is enough — it also
+    // fixes the "cluttered" look, since fitting too early (while nodes are
+    // still bunched near their random starting positions) framed the messy
+    // pre-settled layout instead of the resolved one.
+    window.setTimeout(fitGraph,1700);
+    if(window.ResizeObserver){
+      new ResizeObserver(resize).observe(el);
+    }
+
+    // Projects each node's live 3D position into 2D screen space (in the same
+    // CSS-pixel coordinate frame the DNA canvas draws in), so the helix
+    // particles can fly to exactly where the graph nodes actually are and
+    // dissolve into them, instead of two unrelated visuals cross-fading.
+    function getNodeScreenPositions(){
+      const camera = Graph.camera && Graph.camera();
+      const renderer = Graph.renderer && Graph.renderer();
+      if(!camera || !renderer || typeof THREE === 'undefined') return [];
+      const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+      if(!w || !h) return [];
+      const hw = w/2, hh = h/2;
+      const pts = [];
+      nodes.forEach(n=>{
+        if(typeof n.x !== 'number' || typeof n.y !== 'number' || typeof n.z !== 'number') return;
+        const v = new THREE.Vector3(n.x, n.y, n.z);
+        v.project(camera);
+        if(v.z > 1) return;
+        pts.push({
+          x: v.x*hw + hw,
+          y: -(v.y*hh) + hh,
+          group: n.group
+        });
+      });
+      return pts;
+    }
+
+    window.__hobbyGraph = { fit: fitGraph, resize, getNodeScreenPositions };
+  })();
+
+  (function(){
+    const canvas = document.getElementById('dnaCanvas');
+    const wrap = document.querySelector('.graph-view');
+    const graphEl = document.getElementById('graph3d');
+    if(!canvas || !wrap || !graphEl) return;
+    const ctx = canvas.getContext('2d');
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    let W = 0, H = 0;
+
+    function resize(){
+      W = wrap.clientWidth;
+      H = wrap.clientHeight;
+      canvas.width = Math.max(1, W * DPR);
+      canvas.height = Math.max(1, H * DPR);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+    window.setTimeout(resize, 500);
+    // A single delayed re-check isn't enough — late-loading web fonts or a
+    // reflow elsewhere on the page can resize this box well after that. If
+    // the geometry is ever measured while the box is mid-reflow (or briefly
+    // collapsed), everything downstream — the strand radius, the particles'
+    // targets — gets computed too small and the whole thing looks like a
+    // sparse leftover speck instead of a helix. Watch the element itself so
+    // W/H are always correct, not just "correct at one point in time".
+    if(window.ResizeObserver){
+      new ResizeObserver(resize).observe(wrap);
+    }
+
+    // This canvas used to animate every frame for the entire page
+    // lifetime, even while scrolled far out of view — a big, constant
+    // CPU/GPU cost and the main source of page-wide jank. It now only
+    // keeps its rAF loop running while actually visible in the viewport;
+    // frame() below stops re-scheduling itself once out of view, and this
+    // observer wakes it back up when it scrolls back in.
+    let visible = false;
+    if(window.IntersectionObserver){
+      new IntersectionObserver(entries=>{
+        entries.forEach(entry=>{
+          visible = entry.isIntersecting;
+          if(visible && !raf) raf = requestAnimationFrame(frame);
+        });
+      }, {threshold:0}).observe(wrap);
+    } else {
+      visible = true;
+    }
+
+    const RUNGS = 100;
+    const TURNS = 4.5;
+    const RADIUS_FACTOR = 0.15;
+    const DUST_COUNT = 140;
+    const SUB_PER_RUNG = 2;
+    const TILT_DEG = -16;
+    const TILT_RAD = TILT_DEG * Math.PI / 180;
+    let t = 0;
+    let raf = 0;
+    const SPLIT_MS = 340;
+    const REFORM_MS = 260;
+
+    // Scroll-linked "camera" — smoothed zoom/pitch/spin driven purely by
+    // where the strand currently sits in the viewport. No scroll listener
+    // drives this part: it's sampled once per idle animation frame (cheap —
+    // one getBoundingClientRect call), then eased toward its target so it
+    // never jitters or snaps with the scroll wheel.
+    let camScale = 1, camTilt = 0, camSpin = 0;
+    function updateScrollCamera(){
+      const rect = wrap.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight || 1;
+      const centerFrac = (rect.top + rect.height / 2) / vh; // 0=box centered at top, 1=box centered at bottom
+      const closeness = 1 - Math.min(1, Math.abs(centerFrac - 0.5) / 0.65);
+      const zoomTarget = 1 + closeness * 0.4;
+      const tiltTarget = (0.5 - centerFrac) * 0.85;
+      const spinTarget = (0.5 - centerFrac) * 2.1;
+      camScale += (zoomTarget - camScale) * 0.07;
+      camTilt += (tiltTarget - camTilt) * 0.07;
+      camSpin += (spinTarget - camSpin) * 0.07;
+    }
+
+    // Cursor parallax — the strand leans very slightly toward wherever the
+    // pointer is on the page, even before it's hovered directly (hovering
+    // the strand itself triggers the graph reveal below, so this only ever
+    // shows while the cursor is elsewhere). Eased so it never snaps.
+    let mouseTiltX = 0, mouseTiltY = 0, mouseTargetX = 0, mouseTargetY = 0;
+    window.addEventListener('pointermove', (e)=>{
+      const vw = window.innerWidth || 1, vh = window.innerHeight || 1;
+      mouseTargetX = ((e.clientX / vw) - 0.5) * 2;
+      mouseTargetY = ((e.clientY / vh) - 0.5) * 2;
+    }, {passive:true});
+
+    // Scroll velocity gives the spin a brief momentum kick instead of only
+    // ever tracking the eased scroll-camera position above.
+    let lastScrollY = window.scrollY || 0;
+    let scrollSpinBoost = 0;
+    window.addEventListener('scroll', ()=>{
+      const y = window.scrollY || 0;
+      scrollSpinBoost += Math.max(-2.5, Math.min(2.5, (y - lastScrollY) * 0.02));
+      lastScrollY = y;
+    }, {passive:true});
+
+    const particles = [];
+    let dust = [];
+    let rungJitter = [];
+    let ambientDust = [];
+    const AMBIENT_COUNT = 46;
+
+    function initDust(){
+      dust = [];
+      for(let i = 0; i < DUST_COUNT; i++){
+        dust.push({
+          angleOffset: Math.random() * Math.PI * 2,
+          yFrac: Math.random(),
+          radiusScale: 0.3 + Math.random() * 1.15,
+          speed: 0.4 + Math.random() * 0.9,
+          size: 0.5 + Math.random() * 1.3,
+          driftPhase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+    initDust();
+
+    function initJitter(){
+      rungJitter = [];
+      for(let i = 0; i < RUNGS * 2; i++){
+        const arr = [];
+        for(let j = 0; j < SUB_PER_RUNG; j++){
+          arr.push({
+            dx: (Math.random() - 0.5) * 8,
+            dy: (Math.random() - 0.5) * 11,
+            dz: (Math.random() - 0.5) * 0.6,
+            size: 0.5 + Math.random() * 1.1,
+            alpha: 0.14 + Math.random() * 0.24
+          });
+        }
+        rungJitter.push(arr);
+      }
+    }
+    initJitter();
+
+    // A free-floating haze that drifts across the whole panel in screen
+    // space (never tilted or rotated with the strand) — pure atmosphere.
+    function initAmbient(){
+      ambientDust = [];
+      for(let i = 0; i < AMBIENT_COUNT; i++){
+        ambientDust.push({
+          x: Math.random(),
+          y: Math.random(),
+          vx: (Math.random() - 0.5) * 0.00012,
+          vy: (Math.random() - 0.5) * 0.00012 - 0.00006,
+          size: 0.6 + Math.random() * 1.6,
+          alpha: 0.04 + Math.random() * 0.09
+        });
+      }
+    }
+    initAmbient();
+
+    // Deterministic per-rung spacing wobble (same every frame — it's a
+    // function of the rung index, not of time) so the ladder reads as
+    // organic rather than a perfectly even machined coil.
+    const spacingWobble = [];
+    for(let i = 0; i < RUNGS; i++){
+      spacingWobble.push(Math.sin(i * 0.73) * 0.0026 + Math.sin(i * 0.21) * 0.0014);
+    }
+
+    // A small tiled grain pattern, generated once, used as a very faint
+    // film-grain overlay so the flat black fills don't look too clean.
+    let grainPattern = null;
+    (function initGrain(){
+      const g = document.createElement('canvas');
+      g.width = 64; g.height = 64;
+      const gctx = g.getContext('2d');
+      const img = gctx.createImageData(64, 64);
+      for(let i = 0; i < img.data.length; i += 4){
+        const v = Math.random() * 255;
+        img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v;
+        img.data[i+3] = Math.random() * 60;
+      }
+      gctx.putImageData(img, 0, 0);
+      grainPattern = ctx.createPattern(g, 'repeat');
+    })();
+
+    // ---- Electric arcs -------------------------------------------------
+    // A crackle of lightning fires between two points on the strand every
+    // couple of seconds, built with the classic midpoint-displacement
+    // technique: recursively bisect the segment, kick each midpoint
+    // sideways by a shrinking random amount, and the result reads as a
+    // jagged bolt instead of a straight line.
+    let activeBolts = [];
+    let nextBoltAt = 900;
+    function buildBoltPoints(x1, y1, x2, y2, iterations, roughness){
+      let pts = [{x:x1,y:y1},{x:x2,y:y2}];
+      let rough = roughness;
+      for(let it = 0; it < iterations; it++){
+        const next = [pts[0]];
+        for(let k = 0; k < pts.length - 1; k++){
+          const a = pts[k], b = pts[k+1];
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len, ny = dx / len;
+          const disp = (Math.random() - 0.5) * len * rough;
+          next.push({x: mx + nx * disp, y: my + ny * disp}, b);
+        }
+        pts = next;
+        rough *= 0.6;
+      }
+      return pts;
+    }
+    function boltNodePos(i, cx, radius, strandHeight, top){
+      const yFrac = i / (RUNGS - 1) + spacingWobble[i];
+      const y = top + yFrac * strandHeight;
+      const angle = yFrac * Math.PI * TURNS + t + camSpin + (Math.random() < 0.5 ? 0 : Math.PI);
+      const rTaper = radius * taperAt(yFrac);
+      return {x: cx + Math.cos(angle) * rTaper, y};
+    }
+    function maybeSpawnLightning(now, cx, radius, strandHeight, top){
+      if(now < nextBoltAt) return;
+      nextBoltAt = now + 1500 + Math.random() * 2600;
+      const i1 = Math.floor(Math.random() * RUNGS);
+      let i2 = i1 + 4 + Math.floor(Math.random() * 14);
+      if(i2 >= RUNGS) i2 = RUNGS - 1 - Math.floor(Math.random() * 4);
+      const a = boltNodePos(i1, cx, radius, strandHeight, top);
+      const b = boltNodePos(Math.max(0, i2), cx, radius, strandHeight, top);
+      activeBolts.push({
+        points: buildBoltPoints(a.x, a.y, b.x, b.y, 4, 0.5),
+        bornAt: now,
+        life: 130 + Math.random() * 150
+      });
+      if(activeBolts.length > 3) activeBolts.shift();
+    }
+    function drawBolts(now){
+      activeBolts = activeBolts.filter(b => now - b.bornAt < b.life);
+      activeBolts.forEach(b=>{
+        const p = (now - b.bornAt) / b.life;
+        const alpha = (p < 0.2 ? p / 0.2 : 1 - (p - 0.2) / 0.8) * (0.75 + Math.random() * 0.25);
+        if(alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.shadowColor = 'rgba(160,220,255,0.95)';
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = 'rgba(170,225,255,0.85)';
+        ctx.lineWidth = 1.7;
+        ctx.beginPath();
+        b.points.forEach((pt,i)=>{ if(i===0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
+    // ---- Shockwave rings ------------------------------------------------
+    let activeRings = [];
+    let nextRingAt = 2400;
+    function maybeSpawnRing(now){
+      if(now < nextRingAt) return;
+      nextRingAt = now + 3200 + Math.random() * 3600;
+      activeRings.push({ bornAt: now, life: 900 });
+      if(activeRings.length > 2) activeRings.shift();
+    }
+    function drawRings(now, cx, cy, maxR){
+      activeRings = activeRings.filter(r => now - r.bornAt < r.life);
+      activeRings.forEach(r=>{
+        const p = (now - r.bornAt) / r.life;
+        const rad = maxR * (0.15 + p * 1.4);
+        const alpha = (1 - p) * 0.32;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(180,230,255,${alpha.toFixed(3)})`;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+    }
+
+    // ---- Glitch / RGB-split burst ---------------------------------------
+    // Fires briefly every few seconds: a couple of displaced "block" slices
+    // plus a true red/cyan channel-split ghost (built via source-in tinting
+    // on offscreen buffers, so only the strand's own silhouette gets
+    // colored — the transparent background stays untouched).
+    let nextGlitchAt = 3000;
+    let glitchUntil = 0;
+    const glitchSnap = document.createElement('canvas');
+    const glitchR = document.createElement('canvas');
+    const glitchC = document.createElement('canvas');
+    function tintGhost(target, source, dx, color){
+      target.width = source.width; target.height = source.height;
+      const gc = target.getContext('2d');
+      gc.clearRect(0, 0, target.width, target.height);
+      gc.drawImage(source, dx, 0);
+      gc.globalCompositeOperation = 'source-in';
+      gc.fillStyle = color;
+      gc.fillRect(0, 0, target.width, target.height);
+      gc.globalCompositeOperation = 'source-over';
+    }
+    function maybeTriggerGlitch(now){
+      if(now < nextGlitchAt) return;
+      nextGlitchAt = now + 3500 + Math.random() * 4500;
+      glitchUntil = now + 90 + Math.random() * 90;
+    }
+    function drawGlitch(now){
+      if(now >= glitchUntil) return;
+      const w = canvas.width, h = canvas.height;
+      if(w < 2 || h < 2) return;
+      glitchSnap.width = w; glitchSnap.height = h;
+      glitchSnap.getContext('2d').drawImage(canvas, 0, 0);
+      const shift = (2 + Math.random() * 3) * DPR;
+      tintGhost(glitchR, glitchSnap, -shift, 'rgba(255,70,90,0.55)');
+      tintGhost(glitchC, glitchSnap, shift, 'rgba(70,220,255,0.55)');
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'screen';
+      ctx.drawImage(glitchR, 0, 0);
+      ctx.drawImage(glitchC, 0, 0);
+      const slices = 2 + Math.floor(Math.random() * 2);
+      for(let s = 0; s < slices; s++){
+        const sh = (8 + Math.random() * 26) * DPR;
+        const sy = Math.random() * Math.max(1, h - sh);
+        const dx = (Math.random() - 0.5) * 26 * DPR;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(glitchSnap, 0, sy, w, sh, dx, sy, w, sh);
+      }
+      ctx.restore();
+    }
+
+    let state = 'idle';
+    let stateStart = 0;
+    let breath = 1;
+
+    function strandGeometry(){
+      const cx = W / 2, cy = H / 2;
+      const radius = Math.max(18, Math.min(W, H) * RADIUS_FACTOR) * camScale * breath;
+      const strandHeight = H * 0.84 * camScale;
+      const top = cy - strandHeight / 2;
+      return {cx, cy, radius, strandHeight, top};
+    }
+
+    // Strand tapers in near the top and bottom so it reads as a real
+    // double-helix silhouette rather than a uniform cylinder of dots.
+    function taperAt(yFrac){
+      return 0.62 + 0.38 * Math.sin(Math.min(1, Math.max(0, yFrac)) * Math.PI);
+    }
+
+    function applyTilt(cx, cy, angle){
+      ctx.translate(cx, cy);
+      ctx.rotate(angle === undefined ? (TILT_RAD + camTilt + mouseTiltX * 0.09) : angle);
+      ctx.translate(-cx, -cy);
+    }
+
+    function drawParticle(x, y, z, big, strand, accent, pulse){
+      const base = big ? 3.3 : 2.1;
+      const depth = (z + 1) / 2;
+      const size = base * (0.55 + depth * 0.85);
+      const alpha = (0.4 + depth * 0.55) * (0.85 + 0.3 * (pulse === undefined ? 1 : pulse));
+      const shine = accent ? '150,150,150' : '55,55,55';
+      // Soft outer glow, darker where the particle faces away from camera.
+      ctx.beginPath();
+      ctx.arc(x, y, size * 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,0,0,${(alpha * 0.22).toFixed(3)})`;
+      ctx.fill();
+      // Liquid-metal core: a bright fleck fading straight down to black,
+      // instead of one flat fill — gives the black strand real material.
+      const grad = ctx.createRadialGradient(x - size * 0.3, y - size * 0.3, 0, x, y, size);
+      grad.addColorStop(0, `rgba(${shine},${Math.min(1, alpha * 1.1).toFixed(3)})`);
+      grad.addColorStop(0.45, `rgba(0,0,0,${alpha.toFixed(3)})`);
+      grad.addColorStop(1, `rgba(0,0,0,${(alpha * 0.85).toFixed(3)})`);
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    function drawJitterCluster(x, y, z, cluster, strand){
+      cluster.forEach(o=>{
+        const zz = Math.max(-1, Math.min(1, z + o.dz));
+        const depth = (zz + 1) / 2;
+        ctx.beginPath();
+        ctx.arc(x + o.dx, y + o.dy, o.size * (0.6 + depth * 0.6), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0,0,0,${(o.alpha * (0.4 + depth * 0.6)).toFixed(3)})`;
+        ctx.fill();
+      });
+    }
+
+    function drawDust(){
+      const {cx, radius, strandHeight, top} = strandGeometry();
+      for(let i = 0; i < dust.length; i++){
+        const d = dust[i];
+        const angle = d.angleOffset + t * d.speed;
+        const r = radius * d.radiusScale;
+        const x = cx + Math.cos(angle) * r;
+        const y = top + d.yFrac * strandHeight + Math.sin(t * 0.6 + d.driftPhase) * 5;
+        const z = Math.sin(angle);
+        const depth = (z + 1) / 2;
+        const size = d.size * (0.5 + depth * 0.6);
+        const alpha = (0.14 + depth * 0.3) * (1 - Math.abs(d.radiusScale - 0.75) * 0.25);
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(0.4, size), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0,0,0,${Math.max(0.05, alpha).toFixed(3)})`;
+        ctx.fill();
+      }
+    }
+
+    // Free haze in flat screen space — drawn before the tilt transform is
+    // applied, so it drifts independently of the strand's rotation.
+    function drawAmbient(){
+      for(let i = 0; i < ambientDust.length; i++){
+        const a = ambientDust[i];
+        a.x += a.vx; a.y += a.vy;
+        if(a.x < -0.05) a.x = 1.05; if(a.x > 1.05) a.x = -0.05;
+        if(a.y < -0.05) a.y = 1.05; if(a.y > 1.05) a.y = -0.05;
+        ctx.beginPath();
+        ctx.arc(a.x * W, a.y * H, a.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0,0,0,${a.alpha.toFixed(3)})`;
+        ctx.fill();
+      }
+    }
+
+    // Soft glow that sits behind the strand so the pure-black geometry has
+    // something to separate from against the dark backdrop, plus a very
+    // faint grain pass on top for texture. Both are screen-space, pre-tilt.
+    function drawAtmosphere(cx, cy, radius, strandHeight){
+      const glowR = Math.max(radius * 3.2, strandHeight * 0.42);
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+      glow.addColorStop(0, 'rgba(255,255,255,0.05)');
+      glow.addColorStop(0.55, 'rgba(255,255,255,0.02)');
+      glow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    function drawGrain(){
+      if(!grainPattern) return;
+      ctx.save();
+      ctx.globalAlpha = 0.035;
+      ctx.fillStyle = grainPattern;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
+    function drawRibbons(cx, radius, strandHeight, top){
+      const strands = [0, Math.PI];
+      strands.forEach((offset)=>{
+        ctx.beginPath();
+        for(let i = 0; i < RUNGS; i++){
+          const yFrac = i / (RUNGS - 1) + spacingWobble[i];
+          const y = top + yFrac * strandHeight;
+          const angle = yFrac * Math.PI * TURNS + t + camSpin + offset;
+          const x = cx + Math.cos(angle) * radius * taperAt(yFrac);
+          if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = 'rgba(0,0,0,0.16)';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      });
+    }
+
+    // Short perpendicular ticks at each end of a base-pair rung, echoing
+    // how real base pairs cap off against the sugar-phosphate backbone.
+    function drawBaseTick(x, y, alpha){
+      ctx.beginPath();
+      ctx.moveTo(x, y - 3);
+      ctx.lineTo(x, y + 3);
+      ctx.strokeStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // A tiny "electron" orbiting a handful of rungs — a small nod to the
+    // molecular subject matter rather than pure abstract geometry.
+    function drawOrbiter(x, y, z){
+      const depth = (z + 1) / 2;
+      const oa = t * 4 + x * 0.05;
+      const ox = x + Math.cos(oa) * 6;
+      const oy = y + Math.sin(oa) * 2.4;
+      ctx.beginPath();
+      ctx.arc(ox, oy, 0.9, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(160,160,160,${(0.25 + depth * 0.35).toFixed(3)})`;
+      ctx.fill();
+    }
+
+    function drawHelix(alpha){
+      const now = performance.now();
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      const {cx, cy, radius, strandHeight, top} = strandGeometry();
+      drawAtmosphere(cx, cy, radius, strandHeight);
+      drawAmbient();
+      ctx.save();
+      applyTilt(cx, cy);
+      ctx.globalAlpha = alpha;
+      drawRibbons(cx, radius, strandHeight, top);
+      for(let i = 0; i < RUNGS; i++){
+        const yFrac = i / (RUNGS - 1) + spacingWobble[i];
+        const y = top + yFrac * strandHeight;
+        const angle = yFrac * Math.PI * TURNS + t + camSpin;
+        const rTaper = radius * taperAt(yFrac);
+        const x1 = cx + Math.cos(angle) * rTaper;
+        const z1 = Math.sin(angle);
+        const x2 = cx + Math.cos(angle + Math.PI) * rTaper;
+        const z2 = Math.sin(angle + Math.PI);
+        const pulse = 0.5 + 0.5 * Math.sin(yFrac * 9 - t * 2.4);
+        if(i % 2 === 0){
+          const rungAlpha = (0.08 + 0.12 * ((z1 + 1) / 2)) * (0.8 + 0.4 * pulse);
+          const grad = ctx.createLinearGradient(x1, y, x2, y);
+          grad.addColorStop(0, `rgba(0,0,0,${rungAlpha.toFixed(3)})`);
+          grad.addColorStop(0.5, `rgba(95,95,95,${(rungAlpha * 1.3).toFixed(3)})`);
+          grad.addColorStop(1, `rgba(0,0,0,${rungAlpha.toFixed(3)})`);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x1, y);
+          ctx.lineTo(x2, y);
+          ctx.stroke();
+          drawBaseTick(x1, y, rungAlpha * 1.6);
+          drawBaseTick(x2, y, rungAlpha * 1.6);
+        }
+        const accent = i % 9 === 0;
+        drawParticle(x1, y, z1, z1 > 0, 0, accent, pulse);
+        drawParticle(x2, y, z2, z2 > 0, 1, accent && i % 18 !== 0, pulse);
+        drawJitterCluster(x1, y, z1, rungJitter[i * 2], 0);
+        drawJitterCluster(x2, y, z2, rungJitter[i * 2 + 1], 1);
+        if(i % 20 === 0){
+          drawOrbiter(x1, y, z1);
+          drawOrbiter(x2, y, z2);
+        }
+      }
+      drawDust();
+      drawRings(now, cx, cy, Math.max(radius * 4, strandHeight * 0.5));
+      maybeSpawnLightning(now, cx, radius, strandHeight, top);
+      drawBolts(now);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      drawGrain();
+      maybeSpawnRing(now);
+      maybeTriggerGlitch(now);
+      drawGlitch(now);
+    }
+
+    // Picks a landing/launch spot for particle index i by cycling through
+    // whatever real node screen positions are currently available, so the
+    // helix's own particles are the ones that arrive at (or leave from) the
+    // graph's actual nodes — one structure becoming the other, not two.
+    function pickNodeTarget(nodePts, i){
+      if(!nodePts || !nodePts.length) return null;
+      return nodePts[i % nodePts.length];
+    }
+
+    // Draws a faint chromatic-aberration "ghost" behind a fast-moving
+    // flight particle — a cyan and a warm-grey copy offset by a pixel,
+    // scaled by how much motion energy (arc) the particle currently has.
+    function drawAberration(x, y, size, arc){
+      if(arc < 0.05) return;
+      const off = arc * 1.6;
+      const a = Math.min(0.35, arc * 0.3);
+      ctx.beginPath();
+      ctx.arc(x - off, y, size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(80,220,255,${a.toFixed(3)})`;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x + off, y, size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,90,140,${a.toFixed(3)})`;
+      ctx.fill();
+    }
+
+    function frame(now){
+      if(!visible){ raf = 0; return; }
+      if(!W || !H){ raf = requestAnimationFrame(frame); return; }
+
+      mouseTiltX += (mouseTargetX - mouseTiltX) * 0.04;
+      mouseTiltY += (mouseTargetY - mouseTiltY) * 0.04;
+      scrollSpinBoost *= 0.9;
+
+      if(state === 'idle'){
+        t += 0.011 + scrollSpinBoost * 0.02;
+        breath = 1 + Math.sin(t * 0.6) * 0.035;
+        updateScrollCamera();
+        drawHelix(1);
+      } else if(state === 'splitting'){
+        const elapsed = now - stateStart;
+        const p = Math.min(1, elapsed / SPLIT_MS);
+        const ease = 1 - Math.pow(1 - p, 3);
+        // A decaying wobble (not independent random noise each frame) so it
+        // reads as a camera shake instead of the picture teleporting.
+        const shakeT = Math.max(0, 1 - elapsed / 150);
+        const shakeEnv = shakeT * shakeT;
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        ctx.save();
+        if(shakeEnv > 0){
+          ctx.translate(Math.sin(elapsed * 0.09) * 7 * shakeEnv, Math.cos(elapsed * 0.13) * 7 * shakeEnv);
+        }
+        const {cx, cy, radius, strandHeight} = strandGeometry();
+        // Same base angle the idle state ends on (tilt + scroll-camera tilt
+        // + cursor parallax) so the strand doesn't snap the instant the
+        // hover transition begins — it eases FROM that exact angle.
+        applyTilt(cx, cy, (TILT_RAD + camTilt + mouseTiltX * 0.09) * (1 - ease));
+        const arc = Math.sin(ease * Math.PI);
+        particles.forEach(pt=>{
+          let x, y, size, alpha;
+          if(pt.hasTarget){
+            x = pt.x + (pt.tx - pt.x) * ease + pt.vx * arc * 46;
+            y = pt.y + (pt.ty - pt.y) * ease + pt.vy * arc * 46;
+            size = pt.size * (1 + arc * 0.9);
+            alpha = 0.35 + ease * 0.65;
+          } else {
+            x = pt.x + pt.vx * ease * 160;
+            y = pt.y + pt.vy * ease * 160;
+            size = pt.size * (1 + ease * 1.8);
+            alpha = Math.max(0, 1 - ease);
+          }
+          drawAberration(x, y, size, arc);
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          ctx.fillStyle = pt.color;
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        // The shockwave ring spawned the instant hover began actually gets
+        // drawn here now, instead of only existing during the idle state it
+        // never reaches — so the burst is visible at the moment it fires.
+        drawRings(now, cx, cy, Math.max(radius * 4, strandHeight * 0.5));
+        drawBolts(now);
+        ctx.restore();
+        drawGlitch(now);
+        if(p >= 0.7 && !graphEl.classList.contains('is-visible')){
+          graphEl.classList.add('is-visible');
+          graphEl.style.pointerEvents = 'auto';
+        }
+        if(p >= 1){
+          state = 'revealed';
+          canvas.style.opacity = '0';
+          canvas.style.pointerEvents = 'none';
+          window.setTimeout(()=>{
+            if(state === 'revealed') canvas.style.display = 'none';
+          }, 260);
+        }
+      } else if(state === 'reforming'){
+        const elapsed = now - stateStart;
+        const p = Math.min(1, elapsed / REFORM_MS);
+        const ease = 1 - Math.pow(1 - p, 3);
+        const shakeT = Math.max(0, 1 - elapsed / 120);
+        const shakeEnv = shakeT * shakeT;
+        if(particles.length){
+          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+          ctx.clearRect(0, 0, W, H);
+          ctx.save();
+          if(shakeEnv > 0){
+            ctx.translate(Math.sin(elapsed * 0.1) * 5 * shakeEnv, Math.cos(elapsed * 0.14) * 5 * shakeEnv);
+          }
+          const {cx, cy, radius, strandHeight} = strandGeometry();
+          // Eases TO the same base angle idle uses (see note above), so
+          // landing back into 'idle' is a continuation, not a jump cut.
+          applyTilt(cx, cy, (TILT_RAD + camTilt + mouseTiltX * 0.09) * ease);
+          const arc = Math.sin(ease * Math.PI);
+          particles.forEach(pt=>{
+            const x = pt.x + (pt.tx - pt.x) * ease + pt.vx * arc * 46;
+            const y = pt.y + (pt.ty - pt.y) * ease + pt.vy * arc * 46;
+            const size = pt.size * (1 + arc * 0.7);
+            drawAberration(x, y, size, arc);
+            ctx.globalAlpha = 0.4 + ease * 0.6;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fillStyle = pt.color;
+            ctx.fill();
+          });
+          ctx.globalAlpha = 1;
+          drawRings(now, cx, cy, Math.max(radius * 4, strandHeight * 0.5));
+          drawBolts(now);
+          ctx.restore();
+        } else {
+          drawHelix(p);
+        }
+        if(p >= 1){ state = 'idle'; particles.length = 0; }
+      }
+      raf = requestAnimationFrame(frame);
+    }
+
+    function beginSplit(){
+      if(state !== 'idle') return;
+      if(W < 40 || H < 40) resize(); // guard against acting on a stale/collapsed measurement
+      if(W < 40 || H < 40) return;
+      canvas.style.display = 'block';
+      canvas.style.pointerEvents = 'auto';
+      canvas.style.opacity = '1';
+      state = 'splitting';
+      stateStart = performance.now();
+      glitchUntil = stateStart + 120;
+      activeRings.push({ bornAt: stateStart, life: 700 });
+      particles.length = 0;
+      const {cx, radius, strandHeight, top} = strandGeometry();
+      const nodePts = (window.__hobbyGraph && window.__hobbyGraph.getNodeScreenPositions)
+        ? window.__hobbyGraph.getNodeScreenPositions() : [];
+      let idx = 0;
+      for(let i = 0; i < RUNGS; i++){
+        const yFrac = i / (RUNGS - 1);
+        const y = top + yFrac * strandHeight;
+        const angle = yFrac * Math.PI * TURNS + t + camSpin;
+        [
+          [angle, 'rgba(0,0,0,0.62)'],
+          [angle + Math.PI, 'rgba(0,0,0,0.5)']
+        ].forEach(([a, color])=>{
+          const x = cx + Math.cos(a) * radius;
+          const vx = Math.cos(a) + (Math.random() - 0.5) * 0.4;
+          const vy = Math.sin(a) * 0.3 + (Math.random() - 0.5) * 0.5 - 0.35;
+          const target = pickNodeTarget(nodePts, idx++);
+          particles.push({
+            x, y, vx, vy, size: 2.2, color,
+            hasTarget: !!target,
+            tx: target ? target.x : x, ty: target ? target.y : y
+          });
+        });
+      }
+      dust.forEach(d=>{
+        const angle = d.angleOffset + t * d.speed;
+        const r = radius * d.radiusScale;
+        const x = cx + Math.cos(angle) * r;
+        const y = top + d.yFrac * strandHeight;
+        const vx = Math.cos(angle) * 0.85 + (Math.random() - 0.5) * 0.6;
+        const vy = Math.sin(angle) * 0.25 + (Math.random() - 0.5) * 0.55 - 0.25;
+        const target = pickNodeTarget(nodePts, idx++);
+        particles.push({
+          x, y, vx, vy, size: d.size * 0.9, color: 'rgba(0,0,0,0.4)',
+          hasTarget: !!target,
+          tx: target ? target.x : x, ty: target ? target.y : y
+        });
+      });
+    }
+
+    function beginReform(){
+      if(state !== 'revealed') return;
+      if(W < 40 || H < 40) resize();
+      canvas.style.display = 'block';
+      canvas.style.opacity = '1';
+      graphEl.classList.remove('is-visible');
+      graphEl.style.pointerEvents = 'none';
+      state = 'reforming';
+      stateStart = performance.now();
+      glitchUntil = stateStart + 90;
+
+      // Particles are born wherever the graph's own nodes currently sit on
+      // screen, then fly back to their helix "home" position — the graph
+      // dismantles into the particles that reassemble the strand.
+      const nodePts = (window.__hobbyGraph && window.__hobbyGraph.getNodeScreenPositions)
+        ? window.__hobbyGraph.getNodeScreenPositions() : [];
+      particles.length = 0;
+      const {cx, radius, strandHeight, top} = strandGeometry();
+      const homes = [];
+      for(let i = 0; i < RUNGS; i++){
+        const yFrac = i / (RUNGS - 1);
+        const y = top + yFrac * strandHeight;
+        const angle = yFrac * Math.PI * TURNS + t + camSpin;
+        homes.push({ x: cx + Math.cos(angle) * radius, y, size: 2.2, color: 'rgba(0,0,0,0.62)' });
+        homes.push({ x: cx + Math.cos(angle + Math.PI) * radius, y, size: 2.2, color: 'rgba(128,128,128,0.5)' });
+      }
+      dust.forEach(d=>{
+        const angle = d.angleOffset + t * d.speed;
+        const r = radius * d.radiusScale;
+        homes.push({
+          x: cx + Math.cos(angle) * r,
+          y: top + d.yFrac * strandHeight,
+          size: d.size * 0.9,
+          color: 'rgba(0,0,0,0.4)'
+        });
+      });
+      homes.forEach((home, i)=>{
+        const src = nodePts.length ? nodePts[i % nodePts.length] : null;
+        const sx = src ? src.x : home.x + (Math.random() - 0.5) * 140;
+        const sy = src ? src.y : home.y + (Math.random() - 0.5) * 140;
+        particles.push({
+          x: sx, y: sy,
+          tx: home.x, ty: home.y,
+          vx: (Math.random() - 0.5), vy: (Math.random() - 0.5) - 0.2,
+          size: home.size, color: home.color
+        });
+      });
+    }
+
+    raf = requestAnimationFrame(frame);
+    wrap.addEventListener('pointerenter', beginSplit);
+    wrap.addEventListener('pointerleave', beginReform);
+  })();
+
+
+
+  const cursorLens = document.createElement('span');
+  const cursorLensLabel = document.createElement('span');
+  const lensViewport = document.createElement('span');
+  cursorLens.className = 'cursor-lens';
+  cursorLens.setAttribute('aria-hidden','true');
+  cursorLensLabel.className = 'cursor-lens-label';
+  lensViewport.className = 'cursor-lens-viewport';
+  cursorLens.appendChild(cursorLensLabel);
+  lensViewport.appendChild(cursorLens);
+  document.body.appendChild(lensViewport);
+
+  const LENS_SIZE = 38, LENS_ZOOM = 2.3;
+
+  window.resetCursorLens = function(){
+    lensViewport.classList.remove('visible');
+  };
+
+  window.updateCursorLens = function(frameEl, imgEl, clientX, clientY){
+    const isImg = imgEl && imgEl.tagName === 'IMG';
+    const isVideo = imgEl && imgEl.tagName === 'VIDEO';
+    const hasRealImage = imgEl && imgEl.isConnected && (
+      (isImg && imgEl.naturalWidth > 0) || (isVideo && imgEl.videoWidth > 0)
+    );
+
+    // Measure the actual media element when there is one, NOT the frame.
+    // Both .lb-frame img (the post-swap "reveal" transition) and
+    // .photo-frame img (the hover parallax) apply their own CSS `transform`
+    // (scale/translate) directly on the <img>/<video>, animated over
+    // ~0.5-0.9s. A transform on a child never changes the PARENT's
+    // getBoundingClientRect() — so frameEl's rect was reporting the
+    // correct final layout size while the visibly-rendered image was still
+    // mid-transition and up to ~6% larger/offset, throwing the lens's crop
+    // math off for nearly a second after every photo swap and continuously
+    // while hovering a grid tile. getBoundingClientRect() on the media
+    // element itself DOES include live transforms, so it always matches
+    // what's actually on screen. Fall back to the frame's rect only for
+    // the "no real image yet" placeholder state, where there's no media
+    // element (and no transform) to measure.
+    const measureEl = hasRealImage ? imgEl : frameEl;
+    const rect = measureEl.getBoundingClientRect();
+    if(!rect.width || !rect.height) return;
+
+    lensViewport.style.left = clientX + 'px';
+    lensViewport.style.top = clientY + 'px';
+
+    const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const relY = Math.max(0, Math.min(rect.height, clientY - rect.top));
+
+    const isLB = frameEl.classList.contains('lb-frame');
+
+    const w = rect.width * LENS_ZOOM;
+    const h = rect.height * LENS_ZOOM;
+
+    cursorLens.style.backgroundSize = isLB ? 'contain' : 'cover';
+    cursorLens.style.width = w.toFixed(1) + 'px';
+    cursorLens.style.height = h.toFixed(1) + 'px';
+
+    // No more S divisor: since rect now comes from the media element's own
+    // (transform-inclusive) box, relX/relY already land in the right place
+    // with a direct 1:1 mapping — the old fudge-factor was only ever
+    // compensating for measuring the wrong (untransformed) box.
+    const offsetX = relX * LENS_ZOOM - LENS_SIZE / 2;
+    const offsetY = relY * LENS_ZOOM - LENS_SIZE / 2;
+
+    cursorLens.style.transform = `translate(${(-offsetX).toFixed(1)}px, ${(-offsetY).toFixed(1)}px)`;
+
+    if(hasRealImage && isImg){
+      const src = imgEl.currentSrc || imgEl.src;
+      cursorLens.style.backgroundImage = `url("${src}")`;
+      cursorLensLabel.style.opacity = '0';
+    } else if(hasRealImage && isVideo){
+      // video frames can't be used as a CSS background image directly,
+      // so just hide the zoom preview and let the video itself play
+      cursorLens.style.backgroundImage = 'none';
+      cursorLensLabel.style.opacity = '0';
+    } else {
+      const tone = frameEl.style.getPropertyValue('--tone') || 'linear-gradient(145deg,#d6cec2,#f4f0e8)';
+      cursorLens.style.backgroundImage = tone;
+      const labelEl = frameEl.querySelector('.empty-label');
+      cursorLensLabel.textContent = labelEl ? labelEl.textContent : 'add photo';
+      cursorLensLabel.style.fontSize = (10 * LENS_ZOOM).toFixed(1) + 'px';
+      cursorLensLabel.style.opacity = '1';
+    }
+    lensViewport.classList.add('visible');
+  };
+
+  if(window.matchMedia('(pointer:fine)').matches){
+    document.documentElement.classList.add('has-custom-cursor');
+
+    const zoomSelector = '.photo-frame, .lb-frame';
+    const graphSelector = '#graph3d';
+    // Everything that gets the corner-bracket treatment. The graph is
+    // deliberately excluded — it's a huge canvas area, and snapping
+    // brackets to its full bounding box wouldn't read as a "target".
+    const interactiveSelector = 'a,button,.project-card,[role="button"],.lb-close';
+    const targetSelector = `${interactiveSelector}, ${zoomSelector}`;
+
+    // ---------- Zoom-lens tracking (independent of the bracket cursor) ----------
+    let lastX = -9999, lastY = -9999;
+    document.addEventListener('pointermove', event=>{
+      lastX = event.clientX; lastY = event.clientY;
+      const zoomTarget = event.target.closest && event.target.closest(zoomSelector);
+      if(zoomTarget){
+        const img = zoomTarget.querySelector('img,video');
+        window.updateCursorLens(zoomTarget, img, lastX, lastY);
+      } else {
+        window.resetCursorLens();
+      }
+    }, {passive:true});
+    // Re-samples whatever is currently under the last known pointer
+    // position. Used both for scroll (below) and for the lightbox-frame
+    // observer further down, since neither case gets a fresh
+    // pointermove/mouseover event to hang the usual updates off of.
+    const refreshAtLastPointer = ()=>{
+      if(lastX === -9999) return;
+      const el = document.elementFromPoint(lastX, lastY);
+      const zoomTarget = el && el.closest && el.closest(zoomSelector);
+      if(zoomTarget){
+        window.updateCursorLens(zoomTarget, zoomTarget.querySelector('img,video'), lastX, lastY);
+      } else {
+        window.resetCursorLens();
+      }
+      // The lightbox frame appearing/changing under a stationary pointer
+      // never fires a native mouseover, so the bracket cursor's own
+      // enterHandler never runs for it. Sync it here to whatever element
+      // is actually under the pointer right now, same as the zoom lens
+      // above, before falling back to just refreshing the already-active
+      // target's geometry.
+      const hoverTarget = el && el.closest && el.closest(targetSelector);
+      if(window.__enterTargetCursor) window.__enterTargetCursor(hoverTarget);
+      if(window.__refreshTargetCursor) window.__refreshTargetCursor(true);
+    };
+    window.addEventListener('scroll', refreshAtLastPointer, {passive:true, capture:true});
+
+    // ---------- Keep both cursors honest in the lightbox ----------
+    // Elsewhere, a hover target only ever changes shape/content in response
+    // to a mouse event (mouseover/mousemove), which both cursors already
+    // listen for. The lightbox frame is the one place that isn't true: its
+    // size (photo aspect ratio changes) and its image src can both change
+    // from a click on prev/next/close while the pointer itself never moves
+    // off the frame. A ResizeObserver + MutationObserver on the frame
+    // catches the moment of the swap and re-runs the same sampling logic
+    // in place — but that's only half the fix. The incoming photo doesn't
+    // just appear at its final size: `.lb-frame img` has its own CSS
+    // `transform` (scale(1.06) → none) animated over ~0.65s as part of the
+    // reveal, and a transform on the <img> itself never touches the
+    // frame's box, so one snapshot at swap-time goes stale again as that
+    // transform keeps easing — the exact "different-ratio photos look
+    // wrong" symptom, just spread out over a second instead of being
+    // permanent. runSettleLoop below rides out that whole window with
+    // rAF, re-measuring the live (transform-inclusive) box every frame so
+    // the lens tracks the actual on-screen image instead of a stale
+    // snapshot, then stops itself once the transform has settled.
+    const lbFrameEl = document.getElementById('lbFrame');
+    if(lbFrameEl){
+      let settleUntil = 0;
+      const runSettleLoop = ()=>{
+        settleUntil = performance.now() + 950; // covers the .65s transform transition plus slack
+        const step = now=>{
+          refreshAtLastPointer();
+          if(now < settleUntil) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      };
+      if('ResizeObserver' in window) new ResizeObserver(runSettleLoop).observe(lbFrameEl);
+      if('MutationObserver' in window){
+        new MutationObserver(runSettleLoop).observe(lbFrameEl, {
+          childList:true, subtree:true, attributes:true, attributeFilter:['src']
+        });
+      }
+    }
+
+    // ---------- Blob Cursor (ported from the React component) ----------
+    import('https://cdn.jsdelivr.net/npm/gsap@3/+esm').then(({gsap})=>{
+      // On targets the blob still zooms (hoverScale) but stays pure white:
+      // under mix-blend-mode:difference only white gives a true invert; any
+      // tint (the old #b497cf) just produces an off-colour blend that
+      // washes out over mid-tones.
+      const blobColor = '#ffffff', blobColorOnTarget = '#ffffff';
+      const hoverScale = 1.9, reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // Trail of 3 circles, leader first. Each one chases the *same* raw
+      // pointer position but with its own GSAP duration/ease, so the
+      // slower trailers lag behind the fast leader instead of chaining off
+      // each other — that lag plus the SVG goo filter below is what melts
+      // three separate circles into one gooey, teardrop-ish blob.
+      const blobSpecs = [
+        {size:16, duration:0.08, ease:'power3.out'},
+        {size:30, duration:0.24, ease:'power3.out'},
+        {size:22, duration:0.4,  ease:'power3.out'}
+      ];
+
+      // One shared SVG goo filter: blur the trail then sharpen the alpha
+      // falloff back up, so overlapping circles fuse instead of just
+      // overlapping with visible seams.
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS,'svg');
+      svg.setAttribute('width','0');
+      svg.setAttribute('height','0');
+      svg.style.position = 'absolute';
+      svg.innerHTML =
+        '<filter id="blobGoo"><feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>' +
+        '<feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 14 -5.5" result="goo"/>' +
+        '<feComposite in="SourceGraphic" in2="goo" operator="atop"/></filter>';
+      document.body.appendChild(svg);
+
+      const container = document.createElement('div');
+      container.className = 'blob-cursor-container';
+      document.body.appendChild(container);
+      const goo = document.createElement('div');
+      goo.className = 'blob-cursor-goo';
+      container.appendChild(goo);
+
+      const blobs = blobSpecs.map(({size})=>{
+        const b = document.createElement('div');
+        b.className = 'blob-cursor-blob';
+        b.style.width = size+'px';
+        b.style.height = size+'px';
+        b.style.marginLeft = (-size/2)+'px';
+        b.style.marginTop = (-size/2)+'px';
+        goo.appendChild(b);
+        return b;
+      });
+
+      // A position:fixed element is positioned relative to the viewport
+      // UNLESS an ancestor establishes a containing block (transform,
+      // perspective, filter, will-change of those, or contain). None of
+      // this page's ancestors of <body> do that, but this stays in for
+      // correctness if that ever changes. The offset is applied once to
+      // the shared container rather than per-blob, since every blob sits
+      // in the same containing block.
+      const getContainingBlock = element => {
+        let node = element && element.parentElement;
+        while(node && node !== document.documentElement){
+          const style = getComputedStyle(node);
+          if(
+            style.transform !== 'none' ||
+            style.perspective !== 'none' ||
+            style.filter !== 'none' ||
+            style.willChange.includes('transform') ||
+            style.willChange.includes('perspective') ||
+            style.willChange.includes('filter') ||
+            /paint|layout|strict|content/.test(style.contain)
+          ) return node;
+          node = node.parentElement;
+        }
+        return null;
+      };
+      const getContainingBlockOffset = block=>{
+        if(!block) return {x:0,y:0};
+        const rect = block.getBoundingClientRect();
+        return {x:rect.left + block.clientLeft, y:rect.top + block.clientTop};
+      };
+
+      let containingBlock = getContainingBlock(container);
+      const applyOffset = ()=>{
+        const {x,y} = getContainingBlockOffset(containingBlock);
+        gsap.set(container, {x:-x, y:-y});
+      };
+      applyOffset();
+      window.addEventListener('resize', ()=>{ containingBlock = getContainingBlock(container); applyOffset(); });
+
+      const startX = window.innerWidth/2, startY = window.innerHeight/2;
+      gsap.set(blobs, {x:startX, y:startY});
+
+      const movers = blobs.map((b,i)=>({
+        x: gsap.quickTo(b, 'x', {duration: reduceMotion ? 0 : blobSpecs[i].duration, ease: blobSpecs[i].ease}),
+        y: gsap.quickTo(b, 'y', {duration: reduceMotion ? 0 : blobSpecs[i].duration, ease: blobSpecs[i].ease})
+      }));
+
+      let lastMoveX = startX, lastMoveY = startY;
+      const moveCursor = (x,y)=>{
+        lastMoveX = x; lastMoveY = y;
+        movers.forEach(m=>{ m.x(x); m.y(y); });
+      };
+      window.addEventListener('mousemove', e=>moveCursor(e.clientX, e.clientY));
+
+      let activeTarget = null;
+      let currentLeaveHandler = null;
+
+      const cleanupTarget = target=>{
+        if(currentLeaveHandler) target.removeEventListener('mouseleave', currentLeaveHandler);
+        currentLeaveHandler = null;
+      };
+
+      const setHoverVisual = (on, instant)=>{
+        gsap.to(blobs, {
+          scale: on ? hoverScale : 1,
+          backgroundColor: on ? blobColorOnTarget : blobColor,
+          duration: instant ? 0 : 0.2, ease:'power2.out', overwrite:'auto'
+        });
+      };
+
+      // Re-affirms the hover visual for activeTarget. There's no geometry
+      // to re-snap to any more (the blob doesn't conform to the target's
+      // box), so this just guards against the color/scale tween having
+      // been interrupted mid-flight when the lightbox frame changes shape
+      // or photo under a stationary pointer. Exposed on window so the
+      // pointermove/ResizeObserver wiring in the other script block can
+      // still call it the same way it called the old bracket cursor.
+      window.__refreshTargetCursor = (instant)=>{
+        if(!activeTarget || !activeTarget.isConnected) return;
+        setHoverVisual(true, instant);
+      };
+
+      const enterTarget = target=>{
+        if(!target || activeTarget === target) return;
+        if(activeTarget) cleanupTarget(activeTarget);
+
+        activeTarget = target;
+        setHoverVisual(true, false);
+
+        const leaveHandler = ()=>{
+          activeTarget = null;
+          setHoverVisual(false, false);
+          cleanupTarget(target);
+        };
+
+        currentLeaveHandler = leaveHandler;
+        target.addEventListener('mouseleave', leaveHandler);
+      };
+
+      const enterHandler = e=>{
+        const target = e.target.closest && e.target.closest(targetSelector);
+        enterTarget(target);
+      };
+
+      // Exposed so code that changes what's on screen without a real mouse
+      // event (the lightbox opening under a stationary pointer, in
+      // particular) can force a sync instead of leaving the blob's hover
+      // state stuck at whatever it was when the pointer first arrived.
+      // See refreshAtLastPointer.
+      window.__enterTargetCursor = enterTarget;
+      window.addEventListener('mouseover', enterHandler, {passive:true});
+
+      window.addEventListener('scroll', ()=>{
+        if(!activeTarget) return;
+        const elementUnderMouse = document.elementFromPoint(lastMoveX, lastMoveY);
+        const isStillOverTarget = elementUnderMouse &&
+          (elementUnderMouse === activeTarget || elementUnderMouse.closest(targetSelector) === activeTarget);
+        if(!isStillOverTarget && currentLeaveHandler) currentLeaveHandler();
+      }, {passive:true});
+
+      // Belt-and-suspenders: rather than patching every individual event
+      // (mouseover, scroll, resize/mutation on the lightbox frame, GSAP's
+      // own async CDN load landing at an awkward moment...) that's
+      // supposed to keep activeTarget honest, just check every animation
+      // frame whether the element actually under the last-known pointer
+      // position still matches activeTarget, and correct it immediately
+      // if not.
+      gsap.ticker.add(()=>{
+        const el = document.elementFromPoint(lastMoveX, lastMoveY);
+        const target = el && el.closest && el.closest(targetSelector);
+        if(target === activeTarget) return;
+        if(target) enterTarget(target);
+        else if(currentLeaveHandler) currentLeaveHandler();
+      });
+
+      window.addEventListener('mousedown', ()=>{
+        gsap.to(blobs, {scale: (activeTarget ? hoverScale : 1) * 0.7, duration:0.2});
+      });
+      window.addEventListener('mouseup', ()=>{
+        gsap.to(blobs, {scale: activeTarget ? hoverScale : 1, duration:0.3});
+      });
+    });
+  }
+</script>
+</body>
+</html>
