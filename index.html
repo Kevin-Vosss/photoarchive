@@ -1015,12 +1015,12 @@
       // has had a moment to actually be read.
       setTimeout(() => {
         document.addEventListener('keydown', dismiss, {once:true});
-        document.addEventListener('click', dismiss, {once:true});
+        document.addEventListener('pointerdown', dismiss, {once:true});
       }, 1400);
     };
 
     document.addEventListener('keydown', advance, {once:true});
-    document.addEventListener('click', advance, {once:true});
+    document.addEventListener('pointerdown', advance, {once:true});
   })();
 </script>
 <canvas id="colorBends" aria-hidden="true"></canvas>
@@ -1449,6 +1449,15 @@
       lbFrame.insertBefore(el, lbFrame.firstChild);
       applyNativeRatio(lbFrame, el);
 
+      // The "missing" placeholder is generic text ("add this photo...") —
+      // make it say the right thing for video too.
+      const emptyLabel = lbFrame.querySelector('.lb-empty');
+      if(emptyLabel){
+        emptyLabel.textContent = el.tagName === 'VIDEO'
+          ? 'add this video in the photos folder'
+          : 'add this photo in the photos folder';
+      }
+
       // Some hosting setups (an SPA-style catch-all route, a CDN that
       // 200s every missing path with its index page, etc.) return a
       // response for a bad src instead of a real 404 — the element then
@@ -1456,12 +1465,18 @@
       // 'error', so it can sit "loading" forever with nothing to tell the
       // visitor anything is wrong. This is the backstop: if nothing has
       // resolved either way within a few seconds, treat it as missing.
+      // Video gets a longer runway than photos — preload="auto" means the
+      // browser waits on metadata over the network, which legitimately
+      // takes longer than a photo decode on a slow connection. Only a real
+      // MediaError should count as "missing"; a video that's just slow
+      // isn't broken, it needs more time, not a false "missing" label.
       const myToken = ++lbLoadToken;
       const stuckTimer = setTimeout(()=>{
         if(myToken !== lbLoadToken) return; // superseded by a newer item
+        if(el.tagName === 'VIDEO' && !el.error) return;
         lbFrame.classList.remove('has-image');
         lbFrame.classList.add('lb-missing');
-      }, 7000);
+      }, el.tagName === 'VIDEO' ? 15000 : 7000);
 
       const reveal = ()=>{
         clearTimeout(stuckTimer);
@@ -1867,23 +1882,16 @@ class LightboxMorph {
     const applySize = () => {
       this.container.style.width = size.w + 'px';
       this.container.style.height = size.h + 'px';
+      // Drive the canvas's own pixel size in lockstep with the box instead of
+      // waiting on the async ResizeObserver — that's what was causing the
+      // "snap" once the observer's batched callback finally fired.
       this.resize();
     };
 
     await new Promise(resolve => {
-      // Both tweens now share one timeline that starts at t=0 instead of
-      // running back-to-back: the resize tween used to be scheduled with
-      // '>' (i.e. only after the color morph fully finished), which meant
-      // the frame sat still for the whole `morphDur`, then jumped straight
-      // into a resize on the very next tick — a visible one-frame snap at
-      // the handoff. Overlapping the resize into the tail of the color
-      // tween (starting `settleDur` before the color morph ends) lets the
-      // box ease into its new size while the shader is still blending, so
-      // there's no discrete boundary between "color settling" and "resize
-      // starting" for the eye to catch.
       const tl = gsap.timeline({ onComplete: resolve });
       tl.to(this.program.uniforms.uProgress, { value: 1, duration: morphDur, ease });
-      tl.to(size, { w: target.w, h: target.h, duration: settleDur, ease: 'power2.inOut', onUpdate: applySize }, Math.max(0, morphDur - settleDur));
+      tl.to(size, { w: target.w, h: target.h, duration: settleDur, ease: 'power2.inOut', onUpdate: applySize }, '>');
     });
 
     this.stopLoop();
