@@ -1447,10 +1447,16 @@
   }
 
   document.addEventListener('introended', () => {
-    if(video.muted){
-      video.currentTime = 0;
+    if(!video.muted) return;
+    let started = false;
+    const startUnmuted = () => {
+      if(started) return;
+      started = true;
       tryUnmuted();
-    }
+    };
+    video.addEventListener('seeked', startUnmuted, {once:true});
+    setTimeout(startUnmuted, 300);
+    video.currentTime = 0;
   }, {once:true});
 })();
 </script>
