@@ -1431,11 +1431,20 @@
 
   const tryUnmuted = () => {
     video.muted = false;
+    video.volume = 0;
     const p = video.play();
+    const fadeIn = () => {
+      const step = 0.05;
+      const ramp = setInterval(() => {
+        video.volume = Math.min(1, video.volume + step);
+        if(video.volume >= 1) clearInterval(ramp);
+      }, 20);
+    };
     if(p && typeof p.catch === 'function'){
-      p.then(() => setMuted(false)).catch(() => setMuted(true));
+      p.then(() => { setMuted(false); fadeIn(); }).catch(() => setMuted(true));
     } else {
       setMuted(false);
+      fadeIn();
     }
   };
 
