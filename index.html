@@ -1550,6 +1550,7 @@
         d.art.ctx.drawImage(s,0,0);
         d.art.tex.needsUpdate = true;
         d.artReady = true;
+        paintOverlay(d, discs.indexOf(d));
         dirty = true;
       }catch(err){ warnFace(src); }
     };
@@ -1588,6 +1589,117 @@
     discs.forEach((d,i)=>{ if(Math.abs(i-active) <= CFG.renderRadius) loadArt(d); });
   }
 
+  /* ---------------- printed details: foil grain + small rim text ---------------- */
+  const FOIL = (function(){
+    const S = 512, h = S/2;
+    const small = document.createElement('canvas'); small.width = small.height = h;
+    const sx = small.getContext('2d');
+    const im = sx.createImageData(h,h);
+    for(let i=0;i<im.data.length;i+=4){
+      const v = (Math.random()*255)|0;
+      im.data[i]=im.data[i+1]=im.data[i+2]=v; im.data[i+3]=255;
+    }
+    sx.putImageData(im,0,0);
+    const bump = document.createElement('canvas'); bump.width = bump.height = S;
+    const bx = bump.getContext('2d');
+    bx.imageSmoothingEnabled = true;
+    bx.drawImage(small,0,0,S,S);                       // soft, stippled grain
+    // same grain as a light/dark speckle layer that gets printed over the disc face
+    const stip = document.createElement('canvas'); stip.width = stip.height = S;
+    const tx = stip.getContext('2d');
+    const src = bx.getImageData(0,0,S,S), out = tx.createImageData(S,S);
+    for(let i=0;i<src.data.length;i+=4){
+      const n = src.data[i]/255 - .5;
+      const c = n > 0 ? 255 : 0;
+      out.data[i]=out.data[i+1]=out.data[i+2]=c;
+      out.data[i+3] = Math.abs(n)*2*.045*255;
+    }
+    tx.putImageData(out,0,0);
+    const tex = new THREE.CanvasTexture(bump);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(7,7);
+    tex.anisotropy = maxAniso;
+    return {bumpTex:tex, stipple:stip};
+  })();
+
+  let INK = 'rgba(255,255,255,.6)', SHADE = 'rgba(0,0,0,0)';
+  const ovUp = str => String(str).toUpperCase();
+
+  /* draws a string along a circle. mode: 'bottom' (reads left→right, tops toward centre),
+     'top' (tops outward) or 'full' (whole ring, spacing stretched to close exactly) */
+  function arcText(ctx,str,cx,cy,r,mode,sp){
+    const chars = Array.from(str);
+    const ws = chars.map(ch=>ctx.measureText(ch).width + sp);
+    const total = ws.reduce((a,b)=>a+b,0);
+    let th = mode==='bottom' ? Math.PI/2 + total/(2*r)
+           : mode==='top'    ? -Math.PI/2 - total/(2*r)
+           : -Math.PI/2;
+    chars.forEach((ch,k)=>{
+      const a = ws[k]/r;
+      const mid = mode==='bottom' ? th - a/2 : th + a/2;
+      const rot = mode==='bottom' ? mid - Math.PI/2 : mid + Math.PI/2;
+      ctx.save();
+      ctx.translate(cx + Math.cos(mid)*r, cy + Math.sin(mid)*r);
+      ctx.rotate(rot);
+      ctx.fillStyle = INK; ctx.fillText(ch,0,0);
+      ctx.restore();
+      th += mode==='bottom' ? -a : a;
+    });
+    return total / r;   // angle used (rad)
+  }
+  function arcWidth(ctx,str,sp){
+    return Array.from(str).reduce((a,ch)=>a+ctx.measureText(ch).width+sp,0);
+  }
+
+  function makeOverlay(){
+    const c = document.createElement('canvas'); c.width = c.height = ART;
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = maxAniso;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    return {canvas:c, ctx:c.getContext('2d'), tex};
+  }
+
+  function paintOverlay(d,i){
+    const ctx = d.ov.ctx, S = d.ov.canvas.width, R = S/2, k = S/1024;
+    ctx.clearRect(0,0,S,S);
+
+    // pick ink from the artwork under the rim: light print on dark art, dark print on light art
+    let lum = .3;
+    try{
+      let sum = 0, cnt = 0;
+      for(let a=0;a<48;a++){
+        const t = a/48*Math.PI*2, px = Math.round(R + Math.cos(t)*R*.915), py = Math.round(R + Math.sin(t)*R*.915);
+        const q = d.art.ctx.getImageData(px,py,1,1).data;
+        sum += (.2126*q[0] + .7152*q[1] + .0722*q[2])/255; cnt++;
+      }
+      lum = sum/cnt;
+    }catch(e){}
+    INK = lum > .62 ? 'rgba(20,20,20,.42)' : 'rgba(255,255,255,.55)';
+
+    ctx.save();
+    ctx.beginPath(); ctx.arc(R,R,R*faceOuter,0,Math.PI*2); ctx.clip();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+
+    const it = d.item, n = pad2(i+1) + '/' + pad2(N);
+    const font = (w,px)=> w + ' ' + (px*k).toFixed(1) + 'px Inter,Arial,sans-serif';
+    const sp = 5*k, rr = R*.93;
+
+    // credits along the rim, like a real disc
+    ctx.font = font(500,12);
+    arcText(ctx, ovUp('© 2026 Kevin Daison  ·  all rights reserved'), R,R, rr, 'top', sp);
+
+    const cands = [
+      [it.title, it.date, 'Disc ' + n],
+      [it.title, 'Disc ' + n],
+      ['Disc ' + n]
+    ].map(a=>ovUp(a.join('  ·  ')));
+    const line = cands.find(t=>arcWidth(ctx,t,sp) <= rr*2.6) || cands[cands.length-1];
+    arcText(ctx, line, R,R, rr, 'bottom', sp);
+
+    ctx.restore();
+    d.ov.tex.needsUpdate = true;
+  }
+
   /* ---------------- build discs ---------------- */
   const discs = photoItems.map((item,i)=>{
     const g = new THREE.Group();
@@ -1595,17 +1707,30 @@
     const art = makeArt(item,i);
     const frontMat = new THREE.MeshPhysicalMaterial({
       color:0x707070, map:art.tex, emissive:0xffffff, emissiveMap:art.tex, emissiveIntensity:.9,
-      roughness:.5, metalness:0, clearcoat:.3, clearcoatRoughness:.4, envMapIntensity:.3
+      roughness:.5,
+      metalness:0, clearcoat:.3, clearcoatRoughness:.4, envMapIntensity:.3
     });
     const front = new THREE.Mesh(faceGeo, frontMat); front.position.z = T/2 + .0006;
     const back  = new THREE.Mesh(faceGeo, backMat);  back.rotation.y = Math.PI; back.position.z = -T/2 - .0006;
     const lathe = (geo,mat)=>{ const m = new THREE.Mesh(geo,mat); m.rotation.x = Math.PI/2; return m; };
     const pick = new THREE.Mesh(pickGeo, pickMat); pick.userData.index = i;
-    spin.add(front, back, lathe(edgeGeo,edgeMat), lathe(frostGeo,frostMat), lathe(matrixGeo,matrixMat), lathe(hubGeo,hubMat), pick);
+    const ov = makeOverlay();
+    const ovMesh = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({map:ov.tex, transparent:true, depthWrite:false, toneMapped:false}));
+    ovMesh.position.z = T/2 + .0013;
+    spin.add(front, ovMesh, back, lathe(edgeGeo,edgeMat), lathe(frostGeo,frostMat), lathe(matrixGeo,matrixMat), lathe(hubGeo,hubMat), pick);
     g.visible = false;
     group.add(g);
-    return {item, group:g, spin, art, frontMat, artReady:false, pick, hover:0, openK:0, spinV:0, spinA:0, tx:0, ty:0, e:0, video:null, videoReady:false};
+    return {item, group:g, spin, art, ov, frontMat, artReady:false, pick, hover:0, openK:0, spinV:0, spinA:0, tx:0, ty:0, e:0, video:null, videoReady:false};
   });
+
+  discs.forEach(paintOverlay);
+  if(document.fonts && document.fonts.load){
+    Promise.all([
+      document.fonts.load('700 16px "Space Mono"'),
+      document.fonts.load('400 11px "Space Mono"'),
+      document.fonts.load('italic 400 30px "Fraunces"')
+    ]).catch(()=>{}).then(()=>{ discs.forEach(paintOverlay); dirty = true; });
+  }
 
   /* ---------------- sizing ---------------- */
   function resize(){
@@ -3281,6 +3406,23 @@
       });
     });
   }
+</script>
+<script>
+/* page paper grain: sparse 1px specks on a tiling 250px tile, generated here (no external file) */
+(function pageGrain(){
+  const S = 250, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d');
+  const n = Math.round(S*S*.028);
+  for(let i=0;i<n;i++){
+    const g = 40 + Math.random()*90, a = .25 + Math.random()*.45;
+    x.fillStyle = 'rgba('+(g|0)+','+(g|0)+','+(g|0)+','+a.toFixed(2)+')';
+    x.fillRect((Math.random()*S)|0,(Math.random()*S)|0,1,1);
+  }
+  const d = document.createElement('div');
+  d.setAttribute('aria-hidden','true');
+  d.style.cssText = 'position:fixed;inset:0;z-index:0;pointer-events:none;mix-blend-mode:multiply;opacity:.55;background-size:'+S+'px '+S+'px;background-image:url('+c.toDataURL('image/png')+')';
+  document.body.appendChild(d);
+})();
 </script>
 </body>
 </html>
