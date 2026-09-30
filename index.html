@@ -235,6 +235,7 @@
   .audio-toggle.is-muted .icon-on{display:none}
   .audio-toggle.is-muted .icon-off{display:block}
   header,main,footer{position:relative;z-index:1}
+  main{z-index:auto}
   header{
     background:transparent;
     position:relative;
@@ -675,6 +676,19 @@
     transform:scale(1.06);
   }
 
+  /* photo card "opens" out of the spinning disc */
+  #lightbox.lb-anim{animation:lbBgIn .45s ease-out both}
+  #lightbox.lb-anim .lb-frame{animation:lbCardIn .95s cubic-bezier(.22,1,.36,1) both}
+  #lightbox.lb-anim .lb-nav,#lightbox.lb-anim .lb-cap{animation:lbFadeUp .6s .45s ease-out both}
+  @keyframes lbBgIn{from{background:rgba(23,21,28,0)}to{background:rgba(23,21,28,.94)}}
+  @keyframes lbCardIn{
+    0%{clip-path:circle(22% at 50% 50%);transform:scale(.5) rotate(-200deg);opacity:0}
+    25%{opacity:1}
+    100%{clip-path:circle(78% at 50% 50%);transform:none;opacity:1}
+  }
+  @keyframes lbFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){#lightbox.lb-anim,#lightbox.lb-anim .lb-frame,#lightbox.lb-anim .lb-nav,#lightbox.lb-anim .lb-cap{animation:none}}
+
   .lb-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:rgba(23,21,28,.6);font:11px 'Space Mono',monospace}
   .lb-frame.lb-missing .lb-empty{display:flex}
   .lb-cap{margin-top:15px;color:var(--ink);font:12px/1.4 'Space Mono',monospace}
@@ -753,6 +767,64 @@
     .photo-frame img,.node-caption,.hobby-branch::before,.hobby-branch::after,.lb-frame img,.lb-frame video{transition:none}
     .shiny-text{animation:none;background-position:50% center}
     .project-card{animation:none}
+  }
+
+  /* ============ disc archive (replaces the photo grid) ============ */
+  .disc-gallery{
+    --disc-ink:#000;
+    position:relative;
+    margin:0 -30px;
+    width:calc(100% + 60px);
+    height:clamp(560px,calc(100vh - 128px),980px);
+    overflow:visible;
+    outline:none;
+    color:var(--disc-ink);
+  }
+  .disc-gallery:focus-visible{box-shadow:inset 0 0 0 1px rgba(0,0,0,.45)}
+  .disc-stage{position:absolute;inset:0;touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none}
+  .disc-stage.is-dragging{cursor:grabbing}
+  .has-custom-cursor .disc-stage,.has-custom-cursor .disc-stage.is-dragging{cursor:none!important}
+  #discCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:11;pointer-events:none}
+  @media(min-width:761px){
+    .disc-stage{top:calc(-1 * var(--disc-up,0px))}
+    header{pointer-events:none}
+    header a{pointer-events:auto}
+  }
+  .disc-warn{position:absolute;left:30px;bottom:64px;z-index:13;max-width:360px;padding:9px 11px;background:#000;color:#fff;font:10px/1.45 'Space Mono',monospace;letter-spacing:.02em}
+  .disc-info{position:absolute;left:30px;top:6px;width:clamp(230px,21vw,405px);z-index:2;pointer-events:none}
+  .disc-title{
+    margin:0 0 14px;
+    font-family:'Fraunces',Georgia,serif;font-weight:400;font-variation-settings:'opsz' 144;
+    font-size:clamp(30px,3.1vw,56px);line-height:.98;letter-spacing:-.02em;text-transform:uppercase;
+    min-height:1em;
+  }
+  .disc-meta{margin:0}
+  .disc-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-top:1px solid var(--disc-ink);padding:9px 0 8px}
+  .disc-row dt{font:9px/1 'Space Mono',monospace;letter-spacing:.2em;text-transform:uppercase}
+  .disc-row dd{margin:0;text-align:right;font:500 clamp(13px,1.05vw,17px)/1.25 'Inter',Arial,sans-serif;letter-spacing:-.02em}
+  .disc-counter{margin-top:14px;font:10px/1 'Space Mono',monospace;letter-spacing:.14em}
+  .disc-hint{position:absolute;right:30px;bottom:20px;z-index:2;pointer-events:none;font:9px/1 'Space Mono',monospace;letter-spacing:.16em;text-transform:uppercase;opacity:.6}
+  .disc-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  /* no-WebGL fallback: a plain row of round thumbnails */
+  .disc-gallery.is-fallback{height:auto;overflow:visible}
+  .disc-gallery.is-fallback .disc-stage{position:relative;cursor:auto}
+  .disc-gallery.is-fallback .disc-info,.disc-gallery.is-fallback .disc-hint{display:none}
+  .disc-fallback{display:flex;gap:22px;overflow-x:auto;padding:24px 30px 34px}
+  .disc-fb-item{flex:0 0 auto;width:190px;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:var(--disc-ink)}
+  .disc-fb-face{
+    display:block;width:190px;aspect-ratio:1;border-radius:50%;background-size:cover;background-position:center;
+    -webkit-mask:radial-gradient(circle,transparent 0 8%,#000 8.5%);mask:radial-gradient(circle,transparent 0 8%,#000 8.5%);
+  }
+  .disc-fb-title{display:block;margin-top:10px;font-family:'Fraunces',Georgia,serif;font-size:18px;text-transform:uppercase;line-height:1}
+  .disc-fb-date{display:block;margin-top:4px;font:9px/1 'Space Mono',monospace;letter-spacing:.16em;text-transform:uppercase}
+
+  @media(max-width:760px){
+    .disc-gallery{margin:0 -20px;width:calc(100% + 40px);height:auto;overflow:visible}
+    .disc-info{position:relative;left:auto;top:auto;width:auto;padding:4px 20px 12px}
+    .disc-stage{position:relative;height:min(74vh,150vw)}
+    .disc-hint{position:relative;right:auto;bottom:auto;display:block;margin:10px 20px 0;text-align:right}
+    .disc-fallback{padding:20px 20px 30px}
   }
 </style>
 </head>
@@ -896,10 +968,23 @@
       <p class="section-label lower">01 / visual log</p>
       <p class="section-count lower" id="frameCount">visual log</p>
     </div>
-    <div class="gallery-intro">
-    
+    <div class="disc-gallery" id="discGallery" tabindex="0" role="group" aria-roledescription="carousel" aria-label="Photo archive disc gallery" aria-keyshortcuts="ArrowLeft ArrowRight Home End Enter Space" aria-describedby="discHelp">
+      <aside class="disc-info" id="discInfo">
+        <h2 class="disc-title" id="discTitle"></h2>
+        <dl class="disc-meta">
+          <div class="disc-row"><dt>Note</dt><dd id="discNote"></dd></div>
+          <div class="disc-row"><dt>Date</dt><dd id="discDate"></dd></div>
+          <div class="disc-row"><dt>Frames</dt><dd id="discFrames"></dd></div>
+        </dl>
+        <p class="disc-counter" id="discCount"></p>
+      </aside>
+      <div class="disc-stage" id="discStage">
+        <canvas id="discCanvas" aria-hidden="true"></canvas>
+      </div>
+      <p class="disc-hint" aria-hidden="true">drag · scroll · ← → · click centre to open</p>
+      <p class="disc-sr" id="discHelp">Use left and right arrow keys to browse the archive, Enter to open the selected photos.</p>
+      <p class="disc-sr" id="discLive" aria-live="polite" aria-atomic="true"></p>
     </div>
-    <div class="photo-grid" id="photoGrid" aria-live="polite"></div>
   </section>
 <section id="hobbies">
     <div class="section-topline">
@@ -991,18 +1076,6 @@
       {src:'photos/christ7.jpeg', alt:'A walk outside'},
       {src:'photos/christ8.jpeg', alt:'A walk outside'},
     ]},
-    {date:'april 2026', title:'blue hour', note:'light', ratio:'2/3', media:[
-      {src:'photos/photo-04.jpg', alt:'Blue hour light'}
-    ]},
-    {date:'april 2026', title:'running into sam', note:'people', ratio:'5/4', media:[
-      {src:'photos/photo-05.jpg', alt:'A passing moment with a friend'}
-    ]},
-    {date:'april 2026', title:'golden hour', note:'street', ratio:'3/2', media:[
-      {src:'photos/photo-06.jpg', alt:'Golden hour on the street'}
-    ]},
-    {date:'may 2026', title:'dinner attempt', note:'kitchen', ratio:'4/5', media:[
-      {src:'photos/photo-07.jpg', alt:'An experimental dinner'}
-    ]},
     {date:'august 2025', title:'Goan Trip', note:'fun-day', ratio:'1/1', media:[
       {src:'photos/Goa (1).jpeg', alt:'A small thing found in the garden'},
       {src:'photos/Goa (2).jpeg', alt:'A small thing found in the garden'},
@@ -1012,18 +1085,6 @@
       {src:'photos/Goa (6).jpeg', alt:'A small thing found in the garden'},
       {src:'photos/Goa (7).jpeg', alt:'A small thing found in the garden'},
       {src:'photos/Goa (8).jpeg', alt:'A small thing found in the garden'},
-    ]},
-    {date:'june 2026', title:'on the way', note:'motion', ratio:'3/4', media:[
-      {src:'photos/photo-09.jpg', alt:'A view from the way somewhere'}
-    ]},
-    {date:'june 2026', title:'things i keep', note:'objects', ratio:'4/3', media:[
-      {src:'photos/photo-10.jpg', alt:'A collection of small objects'}
-    ]},
-    {date:'july 2026', title:'open window', note:'afternoon', ratio:'2/3', media:[
-      {src:'photos/photo-11.jpg', alt:'Light through an open window'}
-    ]},
-    {date:'august 2026', title:'current view', note:'archive', ratio:'4/5', media:[
-      {src:'photos/photo-12.jpg', alt:'The current view'}
     ]}
   ];
 
@@ -1076,7 +1137,7 @@
   }
 
   const frameCountEl = document.getElementById('frameCount');
-  if(frameCountEl) frameCountEl.textContent = `${photoItems.length} frame${photoItems.length===1?'':'s'} · visual log`;
+  if(frameCountEl) frameCountEl.textContent = `${photoItems.length} frame${photoItems.length===1?'':'s'} · archive`;
 
   const mediaVisibilityObserver = window.IntersectionObserver
     ? new IntersectionObserver(entries=>{
@@ -1087,97 +1148,6 @@
         });
       }, {threshold:0.1})
     : null;
-
-  const photoGrid = document.getElementById('photoGrid');
-  photoItems.forEach((item,index)=>{
-    const card = document.createElement('article');
-    card.className = 'project-card';
-    card.tabIndex = 0;
-    card.setAttribute('role','button');
-    card.setAttribute('aria-label', `${item.title}, ${item.date}`);
-    card.innerHTML = `
-      <div class="photo-frame empty" style="--tone:${item.tone};--ratio:${item.ratio || '4/5'}" data-label="${item.title}">
-        <span class="empty-label lower">add photo</span>
-        <button class="card-action" type="button" aria-label="view photo">view <span aria-hidden="true">↗</span></button>
-      </div>
-      <div class="card-info">
-        <time class="card-date lower">${item.date}</time>
-        <span class="card-title lower">${item.title}</span>
-        <span class="card-note lower">${item.note}</span>
-      </div>`;
-    const frame = card.querySelector('.photo-frame');
-    const action = card.querySelector('.card-action');
-    const mediaEl = createMediaEl(item.media[0]);
-    frame.insertBefore(mediaEl, frame.firstChild);
-    applyNativeRatio(frame, mediaEl);
-    if(mediaEl.tagName === 'VIDEO' && mediaVisibilityObserver){
-      mediaEl.autoplay = false;
-      mediaEl.removeAttribute('autoplay');
-      mediaVisibilityObserver.observe(mediaEl);
-    }
-    action.addEventListener('click',event=>{event.stopPropagation();openLB(index)});
-    card.addEventListener('click',()=>openLB(index));
-    card.addEventListener('keydown',event=>{
-      if(event.key === 'Enter' || event.key === ' '){event.preventDefault();openLB(index)}
-    });
-    card.addEventListener('pointermove',event=>{
-      if(event.pointerType === 'touch') return;
-      const rect = frame.getBoundingClientRect();
-      const px = Math.max(-0.5, Math.min(0.5, (event.clientX - rect.left) / rect.width - 0.5));
-      const py = Math.max(-0.5, Math.min(0.5, (event.clientY - rect.top) / rect.height - 0.5));
-      card.style.setProperty('--mx', (px * 26).toFixed(2) + 'px');
-      card.style.setProperty('--my', (py * 26).toFixed(2) + 'px');
-      card.style.setProperty('--ry', (px * 10).toFixed(2) + 'deg');
-      card.style.setProperty('--rx', (py * -10).toFixed(2) + 'deg');
-    });
-    card.addEventListener('pointerleave',()=>{
-      card.style.setProperty('--mx','0px');
-      card.style.setProperty('--my','0px');
-      card.style.setProperty('--rx','0deg');
-      card.style.setProperty('--ry','0deg');
-    });
-    photoGrid.appendChild(card);
-  });
-
-  if(!window.matchMedia('(pointer:coarse)').matches &&
-     !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-    const reactFrames = Array.from(photoGrid.querySelectorAll('.photo-frame'));
-    const falloff = 480;   
-    const maxTilt = 7;     
-    let reactRaf = null, reactMouseX = -9999, reactMouseY = -9999;
-
-    const applyReactiveTilt = ()=>{
-      reactRaf = null;
-      reactFrames.forEach(frame=>{
-        const rect = frame.getBoundingClientRect();
-        const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
-        const dx = reactMouseX - cx, dy = reactMouseY - cy;
-        const dist = Math.hypot(dx, dy);
-        const strength = Math.max(0, 1 - dist/falloff);
-        if(strength <= 0){
-          frame.closest('.project-card').style.setProperty('--grx','0deg');
-          frame.closest('.project-card').style.setProperty('--gry','0deg');
-          return;
-        }
-        const gry = Math.max(-maxTilt, Math.min(maxTilt, (dx/falloff) * -maxTilt * strength));
-        const grx = Math.max(-maxTilt, Math.min(maxTilt, (dy/falloff) * maxTilt * strength));
-        frame.closest('.project-card').style.setProperty('--gry', gry.toFixed(2)+'deg');
-        frame.closest('.project-card').style.setProperty('--grx', grx.toFixed(2)+'deg');
-      });
-    };
-
-    window.addEventListener('mousemove', event=>{
-      reactMouseX = event.clientX; reactMouseY = event.clientY;
-      if(!reactRaf) reactRaf = requestAnimationFrame(applyReactiveTilt);
-    }, {passive:true});
-
-    document.addEventListener('mouseleave', ()=>{
-      reactFrames.forEach(frame=>{
-        frame.closest('.project-card').style.setProperty('--grx','0deg');
-        frame.closest('.project-card').style.setProperty('--gry','0deg');
-      });
-    });
-  }
 
   let lbIndex = 0;
   let lbMediaIndex = 0;
@@ -1274,6 +1244,671 @@
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeLB()});
 </script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script>
+(function discArchive(){
+  'use strict';
+  const root = document.getElementById('discGallery');
+  if(!root || typeof photoItems === 'undefined' || !photoItems.length) return;
+
+  const stage   = document.getElementById('discStage');
+  const canvas  = document.getElementById('discCanvas');
+  const info    = document.getElementById('discInfo');
+  const elTitle = document.getElementById('discTitle');
+  const elNote  = document.getElementById('discNote');
+  const elDate  = document.getElementById('discDate');
+  const elFrames= document.getElementById('discFrames');
+  const elCount = document.getElementById('discCount');
+  const elLive  = document.getElementById('discLive');
+  const rows    = Array.from(info.querySelectorAll('.disc-row'));
+
+  const N = photoItems.length;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
+  const pad2  = n=>String(n).padStart(2,'0');
+
+  /* ---- values read from the reference gallery's own config ---- */
+  const CFG = {
+    galleryScale:1.08, hGap:2.3, depthGap:1, activeDiscY:.06,
+    galleryRotX:-30, galleryRotY:-30, inactiveScale:.8,
+    cameraDistance:4.4, cameraFOV:40,
+    discThickness:.01, edgeBevel:1, edgeBleed:.008, holeSize:.14, hubSize:.24, hubMatrixWidth:.4,
+    hoverTiltStrength:.42, hoverLift:.16, hoverScale:.045, dragSensitivity:.95, dragStartDistance:5,
+    snapFreq:9.5, snapDamping:12,
+    spinSpeed:1.1, spinEase:2.2,
+    openSpin:16, openSpinEase:5, openDelay:900,   // click: fast spin-up (rad/s), ramp rate, ms before the photo card opens   // rad/s while hovered (slow DVD-style), spin-up / spin-down rate
+
+    flowLean:.055, flowLeanMax:.3, flowBank:.32, flowDip:.014, flowDipMax:.09,
+    renderRadius:5, artResolution:1024
+  };
+
+  /* cubic-bezier easing (the reference's "discGlide" is 0.32, 0.72, 0, 1) */
+  function bez(x1,y1,x2,y2){
+    const cx=3*x1, bx=3*(x2-x1)-cx, ax=1-cx-bx;
+    const cy=3*y1, by=3*(y2-y1)-cy, ay=1-cy-by;
+    const X=t=>((ax*t+bx)*t+cx)*t, Y=t=>((ay*t+by)*t+cy)*t, dX=t=>(3*ax*t+2*bx)*t+cx;
+    return x=>{
+      if(x<=0) return 0; if(x>=1) return 1;
+      let t=x;
+      for(let i=0;i<8;i++){
+        const e=X(t)-x; if(Math.abs(e)<1e-5) break;
+        const d=dX(t); if(Math.abs(d)<1e-6) break;
+        t-=e/d;
+      }
+      return Y(t);
+    };
+  }
+  const glide = bez(.32,.72,0,1);
+
+  /* ---------------- info panel ---------------- */
+  function frameSummary(item){
+    const v = item.media.filter(m=>isVideoSrc(m.src)).length;
+    const p = item.media.length - v;
+    const parts = [];
+    if(p) parts.push(p + (p===1?' photo':' photos'));
+    if(v) parts.push(v + (v===1?' clip':' clips'));
+    return parts.join(' · ');
+  }
+  let shown = -1;
+  function applyInfo(i){
+    const it = photoItems[i];
+    shown = i;
+    elTitle.textContent = it.title;
+    elNote.textContent = it.note || '—';
+    elDate.textContent = it.date;
+    elFrames.textContent = frameSummary(it);
+    elCount.textContent = pad2(i+1) + ' / ' + pad2(N);
+    elLive.textContent = it.title + ', ' + (i+1) + ' of ' + N;
+    root.dataset.activeIndex = i;
+  }
+  const swapEls = [elTitle].concat(rows);
+  let swapping = false, wanted = 0;
+  function showInfo(i){
+    wanted = i;
+    if(shown === -1 || reduce || !swapEls[0].animate){ applyInfo(i); return; }
+    if(swapping) return;
+    swapping = true;
+    const outs = swapEls.map((el,k)=>el.animate(
+      [{opacity:1,transform:'none'},{opacity:0,transform:'translateY(-8px)'}],
+      {duration:170, delay:k*20, easing:'ease-in', fill:'forwards'}));
+    Promise.all(outs.map(a=>a.finished.catch(()=>{}))).then(()=>{
+      applyInfo(wanted);
+      swapEls.forEach((el,k)=>{
+        el.getAnimations().forEach(a=>a.cancel());
+        el.animate(
+          [{opacity:0,transform:'translateY(12px)'},{opacity:1,transform:'none'}],
+          {duration:520, delay:k*55, easing:'cubic-bezier(.32,.72,0,1)', fill:'backwards'});
+      });
+      swapping = false;
+      if(wanted !== shown) showInfo(wanted);
+    });
+  }
+
+  /* ---------------- state ---------------- */
+  let L = 0, V = 0, target = 0, active = 0;   // L = float position (in discs), V = velocity (discs/s)
+  let dragging = false, dirty = true, inView = true;
+  let openFx = null;   // {i,t0,dur} while the clicked disc winds up before the card opens
+  let W = 1, H = 1, aspect = 1, narrow = false;
+  const isCoarse = window.matchMedia('(pointer:coarse)').matches;
+
+  function goTo(i){
+    target = clamp(Math.round(i), 0, N-1);
+    if(target !== active){ active = target; onActive(); }
+    dirty = true;
+  }
+  function onActive(){
+    showInfo(active);
+    ensureArt();
+  }
+  function openActive(){
+    if(typeof openLB !== 'function' || openFx) return;
+    const i = active;
+    if(reduce){ openLB(i); return; }
+    openFx = {i, t0:performance.now(), dur:CFG.openDelay};
+    dirty = true;
+    setTimeout(()=>{
+      const lbEl = document.getElementById('lightbox');
+      openLB(i);
+      lbEl.classList.remove('lb-anim'); void lbEl.offsetWidth; lbEl.classList.add('lb-anim');
+      setTimeout(()=>lbEl.classList.remove('lb-anim'), 1400);
+      openFx = null; dirty = true;
+    }, CFG.openDelay);
+  }
+
+  /* ---------------- fallback (no WebGL / three.js blocked) ---------------- */
+  function buildFallback(){
+    root.classList.add('is-fallback');
+    const list = document.createElement('div'); list.className = 'disc-fallback';
+    photoItems.forEach((it,i)=>{
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'disc-fb-item';
+      const src = (it.media[0] && !isVideoSrc(it.media[0].src)) ? it.media[0].src : '';
+      const face = document.createElement('span'); face.className = 'disc-fb-face';
+      face.style.backgroundImage = (src ? 'url("' + src + '"), ' : '') + it.tone;
+      const t = document.createElement('span'); t.className = 'disc-fb-title'; t.textContent = it.title;
+      const d = document.createElement('span'); d.className = 'disc-fb-date';  d.textContent = it.date;
+      b.append(face,t,d);
+      b.addEventListener('click',()=>{ if(typeof openLB === 'function') openLB(i); });
+      list.appendChild(b);
+    });
+    stage.appendChild(list);
+    canvas.style.display = 'none';
+  }
+
+  if(!window.THREE){ buildFallback(); applyInfo(0); return; }
+
+  /* ---------------- three.js scene ---------------- */
+  let renderer;
+  try{
+    renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true, powerPreference:'high-performance'});
+  }catch(err){ buildFallback(); applyInfo(0); return; }
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(CFG.cameraFOV, 1, .1, 100);
+  camera.position.set(0,0,CFG.cameraDistance);
+  camera.lookAt(0,0,0);
+
+  const group = new THREE.Group();
+  group.rotation.x = THREE.MathUtils.degToRad(CFG.galleryRotX);
+  group.rotation.y = THREE.MathUtils.degToRad(CFG.galleryRotY);
+  scene.add(group);
+
+  /* studio lighting: soft key, cool rim, generated reflection map */
+  scene.add(new THREE.AmbientLight(0xffffff,.35));
+  const key = new THREE.DirectionalLight(0xFFF9E8,.75); key.position.set(3.5,5,6); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff,.3); fill.position.set(-4,1,4); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0x499FF5,.75); rim.position.set(4,2,-5); scene.add(rim);
+
+  (function makeEnv(){
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+    const x = c.getContext('2d');
+    const g = x.createLinearGradient(0,0,0,512);
+    g.addColorStop(0,'#f2f4f8'); g.addColorStop(.45,'#98a0b0'); g.addColorStop(.55,'#5b6272'); g.addColorStop(1,'#1d2027');
+    x.fillStyle = g; x.fillRect(0,0,1024,512);
+    const blob = (cx,cy,r,col,a)=>{
+      const rg = x.createRadialGradient(cx,cy,0,cx,cy,r);
+      rg.addColorStop(0,col); rg.addColorStop(1,'rgba(255,255,255,0)');
+      x.globalAlpha = a; x.fillStyle = rg; x.fillRect(cx-r,cy-r,2*r,2*r); x.globalAlpha = 1;
+    };
+    blob(220,130,150,'#ffffff',1); blob(720,90,120,'#fff2d2',1);
+    blob(520,330,170,'#8fbfff',.55); blob(900,260,110,'#ffffff',.6);
+    const t = new THREE.CanvasTexture(c);
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    t.encoding = THREE.sRGBEncoding;
+    const pm = new THREE.PMREMGenerator(renderer);
+    const rt = pm.fromEquirectangular(t);
+    scene.environment = rt.texture;
+    t.dispose(); pm.dispose();
+  })();
+
+  /* shared disc geometry: face ring, rim, hub rings (ported from the reference) */
+  const T = CFG.discThickness;
+  const faceOuter = 1 - CFG.edgeBleed;
+  function fixUV(geo){
+    const p = geo.attributes.position, uv = geo.attributes.uv;
+    for(let i=0;i<p.count;i++) uv.setXY(i, p.getX(i)*.5+.5, p.getY(i)*.5+.5);
+    uv.needsUpdate = true;
+  }
+  const faceGeo = new THREE.RingGeometry(CFG.hubSize, faceOuter, 220, 1); fixUV(faceGeo);
+
+  function edgeGeometry(){
+    const e = T/2;
+    const t = .0015 + CFG.edgeBevel*Math.min(T*.55,.018);
+    const n = faceOuter;
+    const pts = [
+      new THREE.Vector2(n,e), new THREE.Vector2(1-t,e), new THREE.Vector2(1,e-t),
+      new THREE.Vector2(1,-e+t), new THREE.Vector2(1-t,-e), new THREE.Vector2(n,-e)
+    ];
+    const g = new THREE.LatheGeometry(pts,256); g.computeVertexNormals(); return g;
+  }
+  function ringLathe(inner,outer,thick,bulge,seg){
+    const o = thick/2, s = Math.max(.002,inner), c = Math.max(1e-4,outer-s);
+    const pts = [new THREE.Vector2(s,-o), new THREE.Vector2(s,o)];
+    for(let k=0;k<=5;k++){
+      const f = k/5, r = s + c*f, y = o*(1-bulge) + o*bulge*(.6+.4*Math.cos(f*Math.PI*3));
+      pts.push(new THREE.Vector2(r,y));
+    }
+    pts.push(new THREE.Vector2(outer,o*.92)); pts.push(new THREE.Vector2(outer,-o*.92));
+    for(let k=5;k>=0;k--){
+      const f = k/5, r = s + c*f, y = -(o*(1-bulge) + o*bulge*(.6+.4*Math.cos(f*Math.PI*3)));
+      pts.push(new THREE.Vector2(r,y));
+    }
+    const g = new THREE.LatheGeometry(pts,seg); g.computeVertexNormals(); return g;
+  }
+  const holeR = CFG.holeSize, hubR = CFG.hubSize;
+  const span = hubR - holeR;
+  const rFrost = holeR + span*.34;
+  const rMatrix = rFrost + span*CFG.hubMatrixWidth;
+  const hubT = T*1.02;
+  const edgeGeo   = edgeGeometry();
+  const frostGeo  = ringLathe(holeR, rFrost, hubT*.96, .4, 128);
+  const matrixGeo = ringLathe(rFrost, rMatrix, hubT*.88, .12, 128);
+  const hubGeo    = ringLathe(rMatrix, hubR, hubT, .22, 160);
+  const pickGeo   = new THREE.CircleGeometry(1,24);
+
+  const edgeMat   = new THREE.MeshStandardMaterial({color:0xd7dbe2, metalness:1, roughness:.28, side:THREE.DoubleSide});
+  const backMat   = new THREE.MeshStandardMaterial({color:0xe4e7ec, metalness:.9, roughness:.22});
+  const frostMat  = new THREE.MeshPhysicalMaterial({color:0xb6c0d0, metalness:.15, roughness:.42, transparent:true, opacity:.82, clearcoat:1, clearcoatRoughness:.25, side:THREE.DoubleSide});
+  const matrixMat = new THREE.MeshStandardMaterial({color:0xe6e9ee, metalness:.35, roughness:.4, side:THREE.DoubleSide});
+  const hubMat    = new THREE.MeshPhysicalMaterial({color:0xcfd5df, metalness:.4, roughness:.3, clearcoat:1, clearcoatRoughness:.2, side:THREE.DoubleSide});
+  const pickMat   = new THREE.MeshBasicMaterial({visible:false, side:THREE.DoubleSide, depthWrite:false});
+
+  /* ---------------- photo -> disc texture ---------------- */
+  const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
+  const ART = window.matchMedia('(max-width:760px)').matches ? 768 : CFG.artResolution;
+
+  function toneColors(tone){
+    const m = String(tone||'').match(/#[0-9a-f]{3,8}/gi);
+    return m && m.length >= 2 ? [m[0], m[1]] : ['#d6cec2','#f4f0e8'];
+  }
+  function paintPlaceholder(ctx,size,item,i){
+    const [a,b] = toneColors(item.tone);
+    const g = ctx.createLinearGradient(0,0,size,size);
+    g.addColorStop(0,a); g.addColorStop(1,b);
+    ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.font = '500 ' + Math.round(size*.09) + 'px "Space Mono",monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(pad2(i+1), size*.5, size*.8);
+  }
+  function makeArt(item,i){
+    const c = document.createElement('canvas'); c.width = c.height = ART;
+    const ctx = c.getContext('2d');
+    paintPlaceholder(ctx,ART,item,i);
+    const tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = maxAniso;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    return {tex, ctx, started:false};
+  }
+  function warnFace(src){
+    console.warn('[disc archive] could not load disc face:', src);
+    if(location.protocol === 'file:' && !root.querySelector('.disc-warn')){
+      const w = document.createElement('p'); w.className = 'disc-warn';
+      w.textContent = 'Photos can\u2019t be read into WebGL from a file:// page. Serve the folder (VS Code Live Server, or "npx serve") and reload.';
+      root.appendChild(w);
+    }
+  }
+  function loadArt(d){
+    if(d.art.started) return;
+    d.art.started = true;
+    const first = d.item.media[0];
+    const src = first && first.src;
+    if(!src) return;
+    if(isVideoSrc(src)){ loadVideoFace(d,src); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.decoding = 'async';
+    img.onload = ()=>{
+      try{
+        // draw to a scratch canvas first: a cross-origin / file:// image taints it, and a tainted canvas can't be un-tainted
+        const s = document.createElement('canvas'); s.width = s.height = ART;
+        const sx = s.getContext('2d');
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        sx.drawImage(img, (img.naturalWidth-side)/2, (img.naturalHeight-side)/2, side, side, 0, 0, ART, ART);
+        sx.getImageData(0,0,1,1);
+        d.art.ctx.drawImage(s,0,0);
+        d.art.tex.needsUpdate = true;
+        d.artReady = true;
+        dirty = true;
+      }catch(err){ warnFace(src); }
+    };
+    img.onerror = ()=>warnFace(src);
+    img.src = src;
+  }
+  const videoHost = document.createElement('div');
+  videoHost.style.cssText = 'position:fixed;left:-9999px;top:0;width:2px;height:2px;overflow:hidden;opacity:0;pointer-events:none';
+  root.appendChild(videoHost);
+  function loadVideoFace(d,src){
+    const v = document.createElement('video');
+    v.muted = true; v.defaultMuted = true; v.setAttribute('muted','');
+    v.loop = true; v.playsInline = true; v.setAttribute('playsinline','');
+    v.autoplay = true; v.preload = 'auto'; v.crossOrigin = 'anonymous';
+    v.src = src;
+    videoHost.appendChild(v);
+    const ready = ()=>{
+      if(d.videoReady || !v.videoWidth) return;
+      d.videoReady = true;
+      const vt = new THREE.VideoTexture(v);
+      vt.encoding = THREE.sRGBEncoding;
+      vt.minFilter = THREE.LinearFilter; vt.magFilter = THREE.LinearFilter; vt.generateMipmaps = false;
+      const w = v.videoWidth, h = v.videoHeight;
+      if(w > h){ vt.repeat.set(h/w,1); vt.offset.set((1-h/w)/2,0); }
+      else     { vt.repeat.set(1,w/h); vt.offset.set(0,(1-w/h)/2); }
+      d.frontMat.map = vt; d.frontMat.emissiveMap = vt; d.frontMat.needsUpdate = true;
+      d.video = v; d.artReady = true;
+      const p = v.play(); if(p && p.catch) p.catch(()=>{});
+      dirty = true;
+    };
+    v.addEventListener('loadeddata', ready);
+    v.addEventListener('loadedmetadata', ready);
+    v.addEventListener('error', ()=>warnFace(src));
+  }
+  function ensureArt(){
+    discs.forEach((d,i)=>{ if(Math.abs(i-active) <= CFG.renderRadius) loadArt(d); });
+  }
+
+  /* ---------------- build discs ---------------- */
+  const discs = photoItems.map((item,i)=>{
+    const g = new THREE.Group();
+    const spin = new THREE.Group(); g.add(spin);
+    const art = makeArt(item,i);
+    const frontMat = new THREE.MeshPhysicalMaterial({
+      color:0x707070, map:art.tex, emissive:0xffffff, emissiveMap:art.tex, emissiveIntensity:.9,
+      roughness:.5, metalness:0, clearcoat:.3, clearcoatRoughness:.4, envMapIntensity:.3
+    });
+    const front = new THREE.Mesh(faceGeo, frontMat); front.position.z = T/2 + .0006;
+    const back  = new THREE.Mesh(faceGeo, backMat);  back.rotation.y = Math.PI; back.position.z = -T/2 - .0006;
+    const lathe = (geo,mat)=>{ const m = new THREE.Mesh(geo,mat); m.rotation.x = Math.PI/2; return m; };
+    const pick = new THREE.Mesh(pickGeo, pickMat); pick.userData.index = i;
+    spin.add(front, back, lathe(edgeGeo,edgeMat), lathe(frostGeo,frostMat), lathe(matrixGeo,matrixMat), lathe(hubGeo,hubMat), pick);
+    g.visible = false;
+    group.add(g);
+    return {item, group:g, spin, art, frontMat, artReady:false, pick, hover:0, openK:0, spinV:0, spinA:0, tx:0, ty:0, e:0, video:null, videoReady:false};
+  });
+
+  /* ---------------- sizing ---------------- */
+  function resize(){
+    const isNarrow = window.innerWidth <= 760;
+    const gr = root.getBoundingClientRect();
+    const up = isNarrow ? 0 : Math.max(0, Math.round(gr.top + window.scrollY));   // canvas reaches up to the top of the page
+    root.style.setProperty('--disc-up', up + 'px');
+    const r = stage.getBoundingClientRect();
+    W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
+    const gh = Math.max(1, H - up);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+    renderer.setSize(W,H,false);
+    aspect = W/H;
+    const f0 = Math.tan(CFG.cameraFOV*Math.PI/360);
+    camera.fov = 2*Math.atan(f0*H/gh)*180/Math.PI;      // keeps discs the same pixel size despite the taller canvas
+    camera.aspect = aspect; camera.updateProjectionMatrix();
+    narrow = isNarrow;
+    const aspG = W/gh;
+    const visW = 2*CFG.cameraDistance*f0*aspG;
+    const fit = narrow ? Math.min(1, .8*visW/(2*CFG.galleryScale)) : 1;
+    group.scale.setScalar(CFG.galleryScale*fit);
+    group.position.x = narrow ? 0 : Math.max(0, 1.75-aspG)*.45;   // nudge right on tighter desktops so the text panel stays clear
+    group.position.y = -(up/2)*(2*CFG.cameraDistance*f0/gh);        // re-centre the discs on the gallery area
+    dirty = true;
+  }
+  if(window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+  window.addEventListener('resize', resize);
+  resize();
+  window.addEventListener('load', resize);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+
+  if(window.IntersectionObserver){
+    new IntersectionObserver(es=>{ inView = es[0].isIntersecting; if(inView) dirty = true; }, {threshold:0}).observe(root);
+  }
+
+  /* ---------------- projection helpers ---------------- */
+  const _v = new THREE.Vector3();
+  function refreshMatrices(){ scene.updateMatrixWorld(true); camera.updateMatrixWorld(); }
+  function projectDisc(d){
+    let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
+    for(let k=0;k<20;k++){
+      const a = k/20*Math.PI*2;
+      _v.set(Math.cos(a),Math.sin(a),0);
+      d.spin.localToWorld(_v); _v.project(camera);
+      const x = (_v.x*.5+.5)*W, y = (-_v.y*.5+.5)*H;
+      if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+    }
+    return {cx:(minx+maxx)/2, cy:(miny+maxy)/2, rx:(maxx-minx)/2, ry:(maxy-miny)/2};
+  }
+
+  /* ---------------- picking ---------------- */
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  function pickAt(cx,cy){
+    const r = canvas.getBoundingClientRect();
+    ndc.set(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+    refreshMatrices();
+    ray.setFromCamera(ndc,camera);
+    const meshes = discs.filter(d=>d.group.visible && d.e > .5).map(d=>d.pick);
+    const hit = ray.intersectObjects(meshes,false)[0];
+    return hit ? hit.object.userData.index : -1;
+  }
+  const ptr = {x:0,y:0,inside:false};
+  let hoverIdx = -1;
+
+  /* ---------------- physics + layout ---------------- */
+  function physics(dt){
+    if(dragging) return;
+    const diff = target - L;
+    if(reduce){
+      L += diff*Math.min(1,dt*18); V = 0;
+      if(Math.abs(target-L) < 1e-3) L = target;
+      return;
+    }
+    if(Math.abs(diff) < 1e-4 && Math.abs(V) < 1e-4){ L = target; V = 0; return; }
+    const steps = Math.max(1, Math.ceil(dt/.008)), h = dt/steps, w2 = CFG.snapFreq*CFG.snapFreq;
+    for(let s=0;s<steps;s++){
+      const a = w2*(target-L) - CFG.snapDamping*V;
+      V += a*h; L += V*h;
+    }
+    L = clamp(L, -.35, N-.65);
+  }
+
+  let introBegin = null;
+  const bootAt = performance.now();
+  function layout(now,dt){
+    const locked = document.documentElement.classList.contains('intro-locked');
+    if(introBegin === null && !locked && (discs[0].artReady || now-bootAt > 900)) introBegin = now;
+
+    const flow = clamp(V*CFG.flowLean, -CFG.flowLeanMax, CFG.flowLeanMax);
+    const dip  = Math.min(CFG.flowDipMax, Math.abs(V)*CFG.flowDip);
+    const v = Math.max(T*3, .12, CFG.depthGap);
+    let animating = dragging || Math.abs(V) > 1e-3 || Math.abs(target-L) > 1e-3;
+
+    // hovered disc pointer offset (for the tilt)
+    let hoverOff = null;
+    if(hoverIdx >= 0 && ptr.inside && !dragging){
+      refreshMatrices();
+      const p = projectDisc(discs[hoverIdx]);
+      const r = canvas.getBoundingClientRect();
+      const R = Math.max(1,(p.rx+p.ry)/2);
+      hoverOff = {x:clamp((ptr.x-r.left-p.cx)/R,-1,1), y:clamp((ptr.y-r.top-p.cy)/R,-1,1)};
+    }
+
+    discs.forEach((d,i)=>{
+      const m = i - L, h = Math.abs(m);
+      const act = clamp(1-h,0,1);                 // 1 on the centred disc, fades to 0 by the next one
+      const ang = m*.35;
+
+      let e = 1;
+      if(!reduce){
+        if(introBegin === null) e = 0;
+        else {
+          const t = (now-introBegin)/1000 - .09*Math.abs(i-target);
+          e = glide(clamp(t/1.05,0,1));
+        }
+      }
+      d.e = e;
+      if(e < 1) animating = true;
+
+      let x = Math.sin(ang)*CFG.hGap*2.4;
+      let y = CFG.activeDiscY*act - dip*(1 - .3*act);
+      let z = -Math.cos(ang)*v*2.4 + v*2.4;
+      let rx = 0;
+      let ry = -ang + flow*(1 + (1-act)*.12);
+      const rz = -flow*CFG.flowBank*(1 - act*.3);
+      const scale = Math.max(CFG.inactiveScale, 1 - h*(1-CFG.inactiveScale)*.6);
+
+      const wantHover = (i === hoverIdx && !isCoarse && !dragging) ? 1 : 0;
+      const dh = wantHover - d.hover;
+      if(Math.abs(dh) > 1e-3){ d.hover += dh*Math.min(1,dt*10); animating = true; } else d.hover = wantHover;
+      const fx = (openFx && openFx.i === i) ? openFx : null;   // clicked disc: hold still, spin fast
+      const fp = fx ? clamp((now-fx.t0)/fx.dur,0,1) : 0;
+      const gx = (i === hoverIdx && hoverOff && !fx) ? hoverOff.x : 0;
+      const gy = (i === hoverIdx && hoverOff && !fx) ? hoverOff.y : 0;
+      const kt = Math.min(1, dt*(gx||gy ? 11 : 7));
+      d.tx += (gx - d.tx)*kt; d.ty += (gy - d.ty)*kt;
+      if(Math.abs(d.tx) > 1e-3 || Math.abs(d.ty) > 1e-3) animating = true; else { d.tx = 0; d.ty = 0; }
+      rx += d.ty*CFG.hoverTiltStrength*Math.max(d.hover,.0001);
+      ry += d.tx*CFG.hoverTiltStrength*Math.max(d.hover,.0001);
+      z += CFG.hoverLift*d.hover;
+
+      // intro: discs slide in from the right and grow
+      x += (1-e)*1.4; ry -= (1-e)*.6; z -= (1-e)*.6;
+
+      // CD spins about its own axis while hovered; eases up to speed and coasts to a stop
+      const wantSpin = fx ? CFG.openSpin : ((wantHover && !reduce) ? CFG.spinSpeed : 0);
+      d.spinV += (wantSpin - d.spinV)*Math.min(1, dt*(fx ? CFG.openSpinEase : CFG.spinEase));
+      d.openK += ((fx ? fp*fp : 0) - d.openK)*Math.min(1, dt*(fx ? 12 : 4));
+      if(Math.abs(d.openK) > 1e-3) animating = true; else d.openK = 0;
+      if(Math.abs(d.spinV) > 1e-3){ d.spinA += d.spinV*dt; animating = true; } else d.spinV = wantSpin ? d.spinV : 0;
+      d.spin.rotation.z = d.spinA;
+
+      d.group.position.set(x,y,z);
+      d.group.rotation.set(rx,ry,rz);
+      d.group.scale.setScalar(Math.max(1e-4, scale*e*(1 + CFG.hoverScale*d.hover + .1*d.openK)));
+      d.group.visible = h <= CFG.renderRadius && e > .002;
+      d.group.renderOrder = Math.round(500 + z*10 - i*.01);
+    });
+    if(hoverIdx >= 0 && ptr.inside && !dragging) animating = true;
+    if(animating) dirty = true;
+    return animating;
+  }
+
+  /* ---------------- input: wheel ---------------- */
+  let wAcc = 0, wLast = 0, wStepAt = -1e9, wPrevAbs = 0, wStart = 0;
+  stage.addEventListener('wheel', e=>{
+    if(e.ctrlKey || e.metaKey) return;
+    const horiz = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+    let d = horiz ? e.deltaX : e.deltaY;
+    if(e.deltaMode === 1) d *= 16; else if(e.deltaMode === 2) d *= H;
+    if(!d) return;
+    const dir = d > 0 ? 1 : -1;
+    // let the page scroll normally once the gallery isn't at the top, or at either end of the row
+    if(!horiz){
+      if(window.scrollY > 40) return;
+      if((dir > 0 && active >= N-1) || (dir < 0 && active <= 0)){ wAcc = 0; return; }
+    }
+    e.preventDefault();
+    const now = performance.now();
+    if(now - wLast > 150){ wAcc = 0; wPrevAbs = 0; wStart = now; }
+    wLast = now;
+    const abs = Math.abs(d);
+    wAcc += d;
+    const notch = abs >= 50;                    // a mouse-wheel click vs. a trackpad stream
+    const need = notch ? 1 : 60, minGap = notch ? 90 : 190;
+    const rising = abs > wPrevAbs*1.2 + 2, decaying = abs <= wPrevAbs;
+    wPrevAbs = abs;
+    const since = now - wStepAt;
+    if(Math.abs(wAcc) >= need && since >= minGap && (notch || rising || !decaying || (now-wStart) > 480 || since > 900)){
+      goTo(Math.round(target) + (wAcc > 0 ? 1 : -1));
+      wAcc = 0; wStepAt = now;
+    }
+  }, {passive:false});
+
+  /* ---------------- input: drag / click ---------------- */
+  let drag = null;
+  const pxPerDisc = ()=> narrow ? W*.42 : clamp(W*.22, 160, 320);
+  stage.addEventListener('pointerdown', e=>{
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    drag = {id:e.pointerId, x0:e.clientX, y0:e.clientY, L0:L, moved:false, s:[{L:L,t:performance.now()}]};
+  });
+  stage.addEventListener('pointermove', e=>{
+    ptr.x = e.clientX; ptr.y = e.clientY; ptr.inside = true;
+    if(drag && e.pointerId === drag.id){
+      const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+      if(!drag.moved && Math.hypot(dx,dy) > CFG.dragStartDistance){
+        if(e.pointerType === 'touch' && Math.abs(dy) > Math.abs(dx)){ drag = null; return; }
+        drag.moved = true; dragging = true;
+        try{ stage.setPointerCapture(e.pointerId); }catch(_){}
+        stage.classList.add('is-dragging');
+        hoverIdx = -1;
+      }
+      if(drag.moved){
+        let Lt = drag.L0 - dx*CFG.dragSensitivity/pxPerDisc();
+        if(Lt < 0) Lt *= .35; else if(Lt > N-1) Lt = (N-1) + (Lt-(N-1))*.35;   // rubber-band at the ends
+        L = Lt; target = clamp(Math.round(Lt),0,N-1);
+        const now = performance.now();
+        drag.s.push({L:Lt,t:now});
+        while(drag.s.length > 2 && now - drag.s[0].t > 100) drag.s.shift();
+        const a = drag.s[0], b = drag.s[drag.s.length-1];
+        V = b.t > a.t ? (b.L-a.L)/((b.t-a.t)/1000) : 0;
+        V = clamp(V,-8,8);
+        if(target !== active){ active = target; onActive(); }
+        dirty = true;
+      }
+      return;
+    }
+    if(e.pointerType === 'mouse'){
+      const idx = pickAt(e.clientX,e.clientY);
+      if(idx !== hoverIdx){ hoverIdx = idx; dirty = true; }
+    }
+  });
+  function endDrag(e,cancelled){
+    if(!drag || e.pointerId !== drag.id) return;
+    const wasMoved = drag.moved;
+    drag = null;
+    stage.classList.remove('is-dragging');
+    if(wasMoved){
+      dragging = false;
+      const t = clamp(Math.round(L + V*.22), Math.round(L)-3, Math.round(L)+3);
+      const dest = clamp(t,0,N-1);
+      target = dest;
+      if(dest !== active){ active = dest; onActive(); }
+      V = clamp(V*.5,-4,4);
+      dirty = true;
+    } else if(!cancelled){
+      const idx = pickAt(e.clientX,e.clientY);
+      if(idx === active) openActive();
+      else if(idx >= 0) goTo(idx);
+    }
+  }
+  stage.addEventListener('pointerup', e=>endDrag(e,false));
+  stage.addEventListener('pointercancel', e=>endDrag(e,true));
+  stage.addEventListener('pointerleave', ()=>{ ptr.inside = false; if(hoverIdx !== -1){ hoverIdx = -1; dirty = true; } });
+
+  /* ---------------- input: keyboard ---------------- */
+  document.addEventListener('keydown', e=>{
+    const lbEl = document.getElementById('lightbox');
+    if(lbEl && lbEl.classList.contains('open')) return;
+    const t = e.target;
+    if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+    if(e.altKey || e.ctrlKey || e.metaKey) return;
+    const focused = root.contains(document.activeElement);
+    const atTop = window.scrollY < 200 && (focused || document.activeElement === document.body);
+    if(!atTop) return;
+    if(e.key === 'ArrowRight'){ e.preventDefault(); goTo(target+1); }
+    else if(e.key === 'ArrowLeft'){ e.preventDefault(); goTo(target-1); }
+    else if(focused && e.key === 'Home'){ e.preventDefault(); goTo(0); }
+    else if(focused && e.key === 'End'){ e.preventDefault(); goTo(N-1); }
+    else if(focused && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); openActive(); }
+  });
+
+  /* ---------------- main loop ---------------- */
+  let last = performance.now(), lastPick = 0;
+  function frame(now){
+    requestAnimationFrame(frame);
+    if(!inView || document.hidden){ last = now; return; }
+    const dt = Math.min(.05, Math.max(0,(now-last)/1000)); last = now;
+    physics(dt);
+    layout(now,dt);
+    let videoLive = false;
+    discs.forEach((d,i)=>{
+      if(!d.video) return;
+      const near = Math.abs(i-L) <= 2.5;
+      if(near && d.video.paused){ const p = d.video.play(); if(p && p.catch) p.catch(()=>{}); }
+      else if(!near && !d.video.paused) d.video.pause();
+      if(near && !d.video.paused) videoLive = true;
+    });
+    if(videoLive) dirty = true;
+    if(ptr.inside && !dragging && !isCoarse && now - lastPick > 90){
+      lastPick = now;
+      const idx = pickAt(ptr.x,ptr.y);
+      if(idx !== hoverIdx){ hoverIdx = idx; dirty = true; }
+    }
+    if(dirty){ renderer.render(scene,camera); dirty = false; }
+  }
+
+  applyInfo(0);
+  ensureArt();
+  requestAnimationFrame(frame);
+})();
+
+</script>
 <script>
 (function colorBends(){
 
