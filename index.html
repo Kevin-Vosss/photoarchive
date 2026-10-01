@@ -686,6 +686,23 @@
   @keyframes lbFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){#lightbox.lb-anim,#lightbox.lb-anim .lb-frame,#lightbox.lb-anim .lb-nav,#lightbox.lb-anim .lb-cap{animation:none}}
 
+  /* cyberpunk dot-matrix loader with progress ring */
+  .lb-loader{position:absolute;left:50%;top:50%;width:104px;height:104px;margin:-52px 0 0 -52px;display:none;align-items:center;justify-content:center;border-radius:50%;background:#07070d;pointer-events:none;
+    box-shadow:0 0 0 1px rgba(5,217,232,.25),0 0 22px rgba(5,217,232,.35),inset 0 0 16px rgba(255,42,109,.2);animation:lbGlitch 2.6s steps(1) infinite}
+  .lb-frame.lb-loading .lb-loader{display:flex}
+  .lb-ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .lb-ring circle{fill:none}
+  .lb-ring .r-track{stroke:rgba(5,217,232,.16);stroke-width:3}
+  .lb-ring .r-ticks{stroke:#ff2a6d;stroke-width:1.2;stroke-dasharray:1 3.1;opacity:.55;transform-origin:50% 50%;animation:lbSpin 9s linear infinite reverse}
+  .lb-ring .r-scan{stroke:#ff2a6d;stroke-width:3;stroke-dasharray:5 95;transform-origin:50% 50%;animation:lbSpin 1.3s linear infinite;filter:drop-shadow(0 0 3px #ff2a6d)}
+  .lb-ring .r-fg{stroke:#05d9e8;stroke-width:3;stroke-dasharray:0 100;transition:stroke-dasharray .12s linear;filter:drop-shadow(0 0 3px #05d9e8)}
+  .lb-dots{display:grid;grid-template-columns:repeat(5,4px);gap:3px;filter:drop-shadow(1px 0 rgba(255,42,109,.85))}
+  .lb-dots i{width:4px;height:4px;border-radius:50%;background:#05d9e8;box-shadow:0 0 4px #05d9e8;opacity:0;transition:opacity .08s linear}
+  .lb-dots i.on{opacity:1}
+  .lb-pct{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);white-space:nowrap;font:9px 'Space Mono',monospace;letter-spacing:.22em;color:#05d9e8;text-shadow:1px 0 #ff2a6d,0 0 6px rgba(5,217,232,.6)}
+  @keyframes lbSpin{to{transform:rotate(360deg)}}
+  @keyframes lbGlitch{0%,91%,100%{transform:none}92%{transform:translate(2px,0)}94%{transform:translate(-2px,1px)}96%{transform:translate(1px,-1px)}98%{transform:none}}
+  @media(prefers-reduced-motion:reduce){.lb-loader,.lb-ring .r-ticks,.lb-ring .r-scan{animation:none}}
   .lb-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:rgba(23,21,28,.6);font:11px 'Space Mono',monospace}
   .lb-frame.lb-missing .lb-empty{display:flex}
   .lb-cap{margin-top:15px;color:var(--ink);font:12px/1.4 'Space Mono',monospace}
@@ -937,7 +954,7 @@
   })();
 </script>
 <canvas id="colorBends" aria-hidden="true"></canvas>
-<video id="bgVideo" class="bg-video" src="goodlife.mp4" autoplay loop muted playsinline aria-hidden="true"></video>
+<video id="bgVideo" class="bg-video" src="goodlife.mp4" preload="auto" autoplay loop muted playsinline aria-hidden="true"></video>
 <div class="bg-tint" aria-hidden="true"></div>
 <div class="bg-glass" aria-hidden="true"></div>
 <button id="audioToggle" class="audio-toggle" type="button" aria-label="Toggle background audio" aria-pressed="false">
@@ -1017,6 +1034,16 @@
     <div class="lb-stage">
       <div class="lb-frame" id="lbFrame">
         <img id="lbImage" alt="">
+        <div class="lb-loader" id="lbLoader" aria-hidden="true">
+          <svg class="lb-ring" viewBox="0 0 100 100">
+            <circle class="r-track" cx="50" cy="50" r="46"/>
+            <circle class="r-ticks" cx="50" cy="50" r="39"/>
+            <circle class="r-scan" cx="50" cy="50" r="46" pathLength="100"/>
+            <circle class="r-fg" id="lbRing" cx="50" cy="50" r="46" pathLength="100" transform="rotate(-90 50 50)"/>
+          </svg>
+          <div class="lb-dots" id="lbDots"></div>
+          <span class="lb-pct" id="lbPct">LOADING 000%</span>
+        </div>
         <span class="lb-empty lower">add this photo in the photos folder</span>
       </div>
     </div>
@@ -1156,6 +1183,53 @@
   let morphBusy = false;
   let lbLoadToken = 0;
 
+  /* dot-matrix loader: cycles 5x7 glyphs + ring shows load progress */
+  const lbLoader = document.getElementById('lbLoader');
+  const lbDots = document.getElementById('lbDots');
+  const lbRing = document.getElementById('lbRing');
+  const lbPct = document.getElementById('lbPct');
+  const LB_GLYPHS = [
+    ['.###.','#...#','#...#','#...#','#...#','#...#','.###.'],
+    ['..##.','.#...','#....','####.','#...#','#...#','.###.'],
+    ['#...#','#...#','#...#','#####','#...#','#...#','#...#'],
+    ['#...#','#...#','.#.#.','..#..','.#.#.','#...#','#...#'],
+    ['...#.','..##.','.#.#.','#..#.','#####','...#.','...#.']
+  ];
+  for(let k=0;k<35;k++) lbDots.appendChild(document.createElement('i'));
+  let lbLoaderTimer = null, lbProgTimer = null, lbGlyph = 0, lbProg = 0;
+  function lbDrawGlyph(){
+    const g = LB_GLYPHS[lbGlyph % LB_GLYPHS.length];
+    lbDots.querySelectorAll('i').forEach((d,k)=>{
+      d.classList.toggle('on', g[Math.floor(k/5)][k%5] === '#');
+    });
+    lbGlyph++;
+  }
+  function lbSetProgress(p){
+    lbProg = Math.max(0, Math.min(100, p));
+    lbRing.style.strokeDasharray = lbProg + ' 100';
+    lbPct.textContent = 'LOADING ' + String(Math.round(lbProg)).padStart(3,'0') + '%';
+  }
+  function lbLoaderStart(getMedia){
+    lbFrame.classList.add('lb-loading');
+    clearInterval(lbLoaderTimer); clearInterval(lbProgTimer);
+    lbGlyph = 0; lbDrawGlyph(); lbSetProgress(0);
+    lbLoaderTimer = setInterval(lbDrawGlyph, 420);
+    lbProgTimer = setInterval(()=>{
+      let p = lbProg + (92 - lbProg) * 0.07;        /* eases toward 92% until the media is ready */
+      const m = getMedia && getMedia();
+      if(m && m.tagName === 'VIDEO' && m.duration && m.buffered && m.buffered.length){
+        p = Math.max(p, Math.min(92, m.buffered.end(m.buffered.length-1) / m.duration * 100));
+      }
+      lbSetProgress(p);
+    }, 80);
+  }
+  function lbLoaderStop(){
+    lbFrame.classList.remove('lb-loading');
+    clearInterval(lbLoaderTimer); clearInterval(lbProgTimer);
+    lbLoaderTimer = lbProgTimer = null;
+    lbSetProgress(100);
+  }
+
   function renderLB(){
 
     if(morphBusy) return;
@@ -1173,7 +1247,8 @@
 
       lbFrame.querySelectorAll('img,video').forEach(node => node.remove());
 
-      lbFrame.classList.remove('lb-missing');
+      lbFrame.classList.remove('lb-missing','has-image');
+      lbLoaderStart(()=>lbFrame.querySelector('img,video'));
 
       const el = createMediaEl(mediaItem);
       if(el.tagName === 'VIDEO'){ el.muted = true; }
@@ -1191,12 +1266,14 @@
       const stuckTimer = setTimeout(()=>{
         if(myToken !== lbLoadToken) return; 
         if(el.tagName === 'VIDEO' && !el.error) return;
+        lbLoaderStop();
         lbFrame.classList.remove('has-image');
         lbFrame.classList.add('lb-missing');
       }, el.tagName === 'VIDEO' ? 15000 : 7000);
 
       const reveal = ()=>{
         clearTimeout(stuckTimer);
+        lbLoaderStop();
         lbFrame.classList.add('has-image');
 
         lbFrame.style.width = '';
@@ -1208,6 +1285,7 @@
       el.addEventListener('loadedmetadata', reveal);
       el.addEventListener('error', ()=>{
         clearTimeout(stuckTimer);
+        lbLoaderStop();
         lbFrame.classList.remove('has-image');
         lbFrame.classList.add('lb-missing');
       }, {once:true});
@@ -1226,7 +1304,7 @@
     lbMediaIndex = (lbMediaIndex + dir + item.media.length) % item.media.length;
     renderLB();
   }
-  function closeLB(){lb.classList.remove('open');document.body.style.overflow=''}
+  function closeLB(){lbLoaderStop();lb.classList.remove('open');document.body.style.overflow=''}
   function lbBackdrop(event){if(event.target.id==='lightbox')closeLB()}
 
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeLB()});
@@ -2177,25 +2255,6 @@
   setMuted(true);
   video.play().catch(() => {});
 
-  const tryUnmuted = () => {
-    video.muted = false;
-    video.volume = 0;
-    const p = video.play();
-    const fadeIn = () => {
-      const step = 0.05;
-      const ramp = setInterval(() => {
-        video.volume = Math.min(1, video.volume + step);
-        if(video.volume >= 1) clearInterval(ramp);
-      }, 20);
-    };
-    if(p && typeof p.catch === 'function'){
-      p.then(() => { setMuted(false); fadeIn(); }).catch(() => setMuted(true));
-    } else {
-      setMuted(false);
-      fadeIn();
-    }
-  };
-
   if(toggle){
     toggle.addEventListener('click', () => {
       if(video.muted){ setMuted(false); video.play().catch(() => {}); }
@@ -2203,17 +2262,38 @@
     });
   }
 
+  /* after the intro: rewind, wait until the first frames are buffered, then unmute and
+     play at full volume from 0:00 - no timed unmute/fade, so the start of the song isn't clipped */
   document.addEventListener('introended', () => {
     if(!video.muted) return;
     let started = false;
-    const startUnmuted = () => {
+    const begin = () => {
       if(started) return;
       started = true;
-      tryUnmuted();
+      video.muted = false;
+      video.volume = 1;
+      const p = video.play();
+      if(p && typeof p.then === 'function'){
+        p.then(() => setMuted(false)).catch(() => { setMuted(true); video.play().catch(() => {}); });
+      } else {
+        setMuted(false);
+      }
     };
-    video.addEventListener('seeked', startUnmuted, {once:true});
-    setTimeout(startUnmuted, 300);
-    video.currentTime = 0;
+    const whenReady = () => {
+      if(video.readyState >= 4) begin();
+      else {
+        video.addEventListener('canplaythrough', begin, {once:true});
+        setTimeout(begin, 2500);
+      }
+    };
+    video.pause();
+    if(video.currentTime > 0.01){
+      video.addEventListener('seeked', whenReady, {once:true});
+      video.currentTime = 0;
+      setTimeout(whenReady, 800);
+    } else {
+      whenReady();
+    }
   }, {once:true});
 })();
 </script>
@@ -3394,23 +3474,6 @@
       });
     });
   }
-</script>
-<script>
-/* page paper grain: sparse 1px specks on a tiling 250px tile, generated here (no external file) */
-(function pageGrain(){
-  const S = 250, c = document.createElement('canvas'); c.width = c.height = S;
-  const x = c.getContext('2d');
-  const n = Math.round(S*S*.028);
-  for(let i=0;i<n;i++){
-    const g = 40 + Math.random()*90, a = .25 + Math.random()*.45;
-    x.fillStyle = 'rgba('+(g|0)+','+(g|0)+','+(g|0)+','+a.toFixed(2)+')';
-    x.fillRect((Math.random()*S)|0,(Math.random()*S)|0,1,1);
-  }
-  const d = document.createElement('div');
-  d.setAttribute('aria-hidden','true');
-  d.style.cssText = 'position:fixed;inset:0;z-index:0;pointer-events:none;mix-blend-mode:multiply;opacity:.55;background-size:'+S+'px '+S+'px;background-image:url('+c.toDataURL('image/png')+')';
-  document.body.appendChild(d);
-})();
 </script>
 </body>
 </html>
