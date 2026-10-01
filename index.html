@@ -655,9 +655,7 @@
     aspect-ratio:var(--ratio,4/5);
 
     background:var(--tone,var(--soft));
-    transition:aspect-ratio .25s ease;
   }
-  .lb-frame:not(.has-image):not(.lb-missing){animation:lbPulse 1.6s ease-in-out infinite}
   @keyframes lbPulse{0%,100%{opacity:1}50%{opacity:.72}}
 
   .lb-frame img,.lb-frame video{
@@ -668,7 +666,6 @@
     height:auto;
     object-fit:contain;
     opacity:1;
-    transition:opacity .5s cubic-bezier(.22,1,.36,1),filter .65s cubic-bezier(.22,1,.36,1),transform .65s cubic-bezier(.22,1,.36,1);
   }
   .lb-frame img.lb-morphing,.lb-frame video.lb-morphing{
     opacity:0;
@@ -1180,7 +1177,6 @@
 
       const el = createMediaEl(mediaItem);
       if(el.tagName === 'VIDEO'){ el.muted = true; }
-      el.classList.add('lb-morphing');
       lbFrame.insertBefore(el, lbFrame.firstChild);
       applyNativeRatio(lbFrame, el);
 
@@ -1206,9 +1202,6 @@
         lbFrame.style.width = '';
         lbFrame.style.height = '';
 
-        requestAnimationFrame(()=>{
-          requestAnimationFrame(()=>el.classList.remove('lb-morphing'));
-        });
       };
       if(el.complete && el.naturalWidth) reveal();
       el.addEventListener('load', reveal);
@@ -1224,12 +1217,7 @@
 
     morphBusy = true;
 
-    if(old){
-      old.classList.add('lb-morphing');
-      setTimeout(insertNew, 260);
-    } else {
-      insertNew();
-    }
+    insertNew();
   }
   function openLB(i){lbIndex=i;lbMediaIndex=0;renderLB();lb.classList.add('open');document.body.style.overflow='hidden'}
   function stepLB(dir){
