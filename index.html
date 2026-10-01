@@ -656,7 +656,8 @@
 
     background:transparent;
   }
-  @keyframes lbPulse{0%,100%{opacity:1}50%{opacity:.72}}
+  /* loading canvas must never paint a tone/gradient box */
+  #lightbox .lb-frame,#lightbox .lb-frame:not(.has-image),#lightbox .lb-stage{background:none !important;box-shadow:none}
 
   .lb-frame img,.lb-frame video{
     display:block;
@@ -1200,7 +1201,6 @@
     const item = photoItems[lbIndex];
     const mediaItem = item.media[lbMediaIndex];
     lbCap.textContent = `${item.date} — ${item.title} · ${item.note}`;
-    lbFrame.style.setProperty('--tone', item.tone);
     lbFrame.dataset.label = item.title;
     lbCount.textContent = item.media.length > 1 ? `${lbMediaIndex + 1} / ${item.media.length}` : '';
 
