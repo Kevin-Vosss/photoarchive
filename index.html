@@ -1191,8 +1191,30 @@
   let lbLoadToken = 0;
 
   /* spinning CD loader: shown while the lightbox media is loading */
-  function lbLoaderStart(){ lbFrame.classList.add('lb-loading'); }
-  function lbLoaderStop(){ lbFrame.classList.remove('lb-loading'); }
+  /* the CD only appears if loading takes longer than LB_LOADER_DELAY, so quick/cached swaps never flash it */
+  const LB_LOADER_DELAY = 350;
+  let lbLoaderTimer = null;
+  function lbLoaderStart(){
+    clearTimeout(lbLoaderTimer);
+    lbLoaderTimer = setTimeout(()=>lbFrame.classList.add('lb-loading'), LB_LOADER_DELAY);
+  }
+  function lbLoaderStop(){
+    clearTimeout(lbLoaderTimer);
+    lbFrame.classList.remove('lb-loading');
+  }
+
+  /* warm the browser cache for the current set so Next/Prev are instant */
+  const lbWarm = new Map();
+  function lbPreload(item){
+    if(!item) return;
+    item.media.forEach(m=>{
+      if(isVideoSrc(m.src) || lbWarm.has(m.src)) return;
+      const im = new Image();
+      im.decoding = 'async';
+      im.src = m.src;
+      lbWarm.set(m.src, im);
+    });
+  }
 
   function renderLB(){
 
@@ -1211,9 +1233,10 @@
       lbFrame.querySelectorAll('img,video').forEach(node => node.remove());
 
       lbFrame.classList.remove('lb-missing','has-image');
-      lbLoaderStart(()=>lbFrame.querySelector('img,video'));
+      lbLoaderStart();
 
       const el = createMediaEl(mediaItem);
+      if(el.tagName === 'IMG') el.loading = 'eager';
       if(el.tagName === 'VIDEO'){ el.muted = true; }
       lbFrame.insertBefore(el, lbFrame.firstChild);
       applyNativeRatio(lbFrame, el);
@@ -1259,6 +1282,7 @@
     morphBusy = true;
 
     insertNew();
+    lbPreload(item);
   }
   function openLB(i){lbIndex=i;lbMediaIndex=0;renderLB();lb.classList.add('open');document.body.style.overflow='hidden'}
   function stepLB(dir){
