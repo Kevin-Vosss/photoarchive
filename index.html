@@ -686,23 +686,14 @@
   @keyframes lbFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){#lightbox.lb-anim,#lightbox.lb-anim .lb-frame,#lightbox.lb-anim .lb-nav,#lightbox.lb-anim .lb-cap{animation:none}}
 
-  /* cyberpunk dot-matrix loader with progress ring */
-  .lb-loader{position:absolute;left:50%;top:50%;width:104px;height:104px;margin:-52px 0 0 -52px;display:none;align-items:center;justify-content:center;border-radius:50%;background:#07070d;pointer-events:none;
-    box-shadow:0 0 0 1px rgba(5,217,232,.25),0 0 22px rgba(5,217,232,.35),inset 0 0 16px rgba(255,42,109,.2);animation:lbGlitch 2.6s steps(1) infinite}
-  .lb-frame.lb-loading .lb-loader{display:flex}
-  .lb-ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-  .lb-ring circle{fill:none}
-  .lb-ring .r-track{stroke:rgba(5,217,232,.16);stroke-width:3}
-  .lb-ring .r-ticks{stroke:#ff2a6d;stroke-width:1.2;stroke-dasharray:1 3.1;opacity:.55;transform-origin:50% 50%;animation:lbSpin 9s linear infinite reverse}
-  .lb-ring .r-scan{stroke:#ff2a6d;stroke-width:3;stroke-dasharray:5 95;transform-origin:50% 50%;animation:lbSpin 1.3s linear infinite;filter:drop-shadow(0 0 3px #ff2a6d)}
-  .lb-ring .r-fg{stroke:#05d9e8;stroke-width:3;stroke-dasharray:0 100;transition:stroke-dasharray .12s linear;filter:drop-shadow(0 0 3px #05d9e8)}
-  .lb-dots{display:grid;grid-template-columns:repeat(5,4px);gap:3px;filter:drop-shadow(1px 0 rgba(255,42,109,.85))}
-  .lb-dots i{width:4px;height:4px;border-radius:50%;background:#05d9e8;box-shadow:0 0 4px #05d9e8;opacity:0;transition:opacity .08s linear}
-  .lb-dots i.on{opacity:1}
-  .lb-pct{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);white-space:nowrap;font:9px 'Space Mono',monospace;letter-spacing:.22em;color:#05d9e8;text-shadow:1px 0 #ff2a6d,0 0 6px rgba(5,217,232,.6)}
-  @keyframes lbSpin{to{transform:rotate(360deg)}}
-  @keyframes lbGlitch{0%,91%,100%{transform:none}92%{transform:translate(2px,0)}94%{transform:translate(-2px,1px)}96%{transform:translate(1px,-1px)}98%{transform:none}}
-  @media(prefers-reduced-motion:reduce){.lb-loader,.lb-ring .r-ticks,.lb-ring .r-scan{animation:none}}
+  /* small spinning CD loader */
+  .lb-loader{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;display:none;pointer-events:none;filter:drop-shadow(0 2px 6px rgba(23,21,28,.35))}
+  .lb-frame.lb-loading .lb-loader{display:block}
+  .lb-cd{display:block;width:100%;height:100%;animation:cdSpin .9s linear infinite}
+  .lb-loader::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+    background:linear-gradient(115deg,rgba(255,255,255,0) 38%,rgba(255,255,255,.42) 48%,rgba(255,255,255,0) 58%)}
+  @keyframes cdSpin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.lb-cd{animation-duration:3s}}
   .lb-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:rgba(23,21,28,.6);font:11px 'Space Mono',monospace}
   .lb-frame.lb-missing .lb-empty{display:flex}
   .lb-cap{margin-top:15px;color:var(--ink);font:12px/1.4 'Space Mono',monospace}
@@ -1035,14 +1026,29 @@
       <div class="lb-frame" id="lbFrame">
         <img id="lbImage" alt="">
         <div class="lb-loader" id="lbLoader" aria-hidden="true">
-          <svg class="lb-ring" viewBox="0 0 100 100">
-            <circle class="r-track" cx="50" cy="50" r="46"/>
-            <circle class="r-ticks" cx="50" cy="50" r="39"/>
-            <circle class="r-scan" cx="50" cy="50" r="46" pathLength="100"/>
-            <circle class="r-fg" id="lbRing" cx="50" cy="50" r="46" pathLength="100" transform="rotate(-90 50 50)"/>
+          <svg class="lb-cd" viewBox="0 0 100 100">
+            <defs>
+              <radialGradient id="cdFace" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="#cdbcf2"/>
+                <stop offset=".45" stop-color="#9f86dc"/>
+                <stop offset="1" stop-color="#8369c4"/>
+              </radialGradient>
+            </defs>
+            <circle cx="50" cy="50" r="48" fill="url(#cdFace)"/>
+            <circle cx="50" cy="50" r="48" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.5"/>
+            <g fill="none" stroke="rgba(255,255,255,.5)" stroke-width="1.2" stroke-linecap="round">
+              <path d="M18 38 C24 16 52 10 66 22"/>
+              <path d="M26 40 C30 26 48 22 58 30"/>
+              <path d="M82 60 C78 80 52 90 36 80"/>
+              <path d="M74 62 C70 74 54 80 44 74"/>
+              <path d="M70 18 C82 26 88 40 86 50"/>
+            </g>
+            <path d="M72 70 l2 -6 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 z" fill="rgba(255,255,255,.9)"/>
+            <path d="M30 24 l1.4 -4 l1.4 4 l4 1.4 l-4 1.4 l-1.4 4 l-1.4 -4 l-4 -1.4 z" fill="rgba(255,255,255,.75)"/>
+            <circle cx="50" cy="50" r="19" fill="rgba(255,255,255,.38)" stroke="rgba(255,255,255,.8)" stroke-width="1"/>
+            <circle cx="50" cy="50" r="12" fill="#0b0b10" stroke="#555" stroke-width="1.5"/>
+            <circle cx="50" cy="50" r="6" fill="none" stroke="#2a2a33" stroke-width="1.2"/>
           </svg>
-          <div class="lb-dots" id="lbDots"></div>
-          <span class="lb-pct" id="lbPct">LOADING 000%</span>
         </div>
         <span class="lb-empty lower">add this photo in the photos folder</span>
       </div>
@@ -1183,52 +1189,9 @@
   let morphBusy = false;
   let lbLoadToken = 0;
 
-  /* dot-matrix loader: cycles 5x7 glyphs + ring shows load progress */
-  const lbLoader = document.getElementById('lbLoader');
-  const lbDots = document.getElementById('lbDots');
-  const lbRing = document.getElementById('lbRing');
-  const lbPct = document.getElementById('lbPct');
-  const LB_GLYPHS = [
-    ['.###.','#...#','#...#','#...#','#...#','#...#','.###.'],
-    ['..##.','.#...','#....','####.','#...#','#...#','.###.'],
-    ['#...#','#...#','#...#','#####','#...#','#...#','#...#'],
-    ['#...#','#...#','.#.#.','..#..','.#.#.','#...#','#...#'],
-    ['...#.','..##.','.#.#.','#..#.','#####','...#.','...#.']
-  ];
-  for(let k=0;k<35;k++) lbDots.appendChild(document.createElement('i'));
-  let lbLoaderTimer = null, lbProgTimer = null, lbGlyph = 0, lbProg = 0;
-  function lbDrawGlyph(){
-    const g = LB_GLYPHS[lbGlyph % LB_GLYPHS.length];
-    lbDots.querySelectorAll('i').forEach((d,k)=>{
-      d.classList.toggle('on', g[Math.floor(k/5)][k%5] === '#');
-    });
-    lbGlyph++;
-  }
-  function lbSetProgress(p){
-    lbProg = Math.max(0, Math.min(100, p));
-    lbRing.style.strokeDasharray = lbProg + ' 100';
-    lbPct.textContent = 'LOADING ' + String(Math.round(lbProg)).padStart(3,'0') + '%';
-  }
-  function lbLoaderStart(getMedia){
-    lbFrame.classList.add('lb-loading');
-    clearInterval(lbLoaderTimer); clearInterval(lbProgTimer);
-    lbGlyph = 0; lbDrawGlyph(); lbSetProgress(0);
-    lbLoaderTimer = setInterval(lbDrawGlyph, 420);
-    lbProgTimer = setInterval(()=>{
-      let p = lbProg + (92 - lbProg) * 0.07;        /* eases toward 92% until the media is ready */
-      const m = getMedia && getMedia();
-      if(m && m.tagName === 'VIDEO' && m.duration && m.buffered && m.buffered.length){
-        p = Math.max(p, Math.min(92, m.buffered.end(m.buffered.length-1) / m.duration * 100));
-      }
-      lbSetProgress(p);
-    }, 80);
-  }
-  function lbLoaderStop(){
-    lbFrame.classList.remove('lb-loading');
-    clearInterval(lbLoaderTimer); clearInterval(lbProgTimer);
-    lbLoaderTimer = lbProgTimer = null;
-    lbSetProgress(100);
-  }
+  /* spinning CD loader: shown while the lightbox media is loading */
+  function lbLoaderStart(){ lbFrame.classList.add('lb-loading'); }
+  function lbLoaderStop(){ lbFrame.classList.remove('lb-loading'); }
 
   function renderLB(){
 
