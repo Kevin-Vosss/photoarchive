@@ -597,9 +597,9 @@
     cursor:grab;
     opacity:0;
     pointer-events:none;
-    transform:scale(0.94);
+    transform:scale(1);
     transform-origin:center center;
-    transition:opacity .38s ease, transform .45s cubic-bezier(.22,1,.36,1);
+    transition:opacity .55s ease;
   }
   #graph3d.is-visible{opacity:1;transform:scale(1)}
   #graph3d:active{cursor:grabbing}
@@ -800,8 +800,8 @@
   .disc-info{position:absolute;left:30px;top:6px;width:clamp(230px,21vw,405px);z-index:2;pointer-events:none}
   .disc-title{
     margin:0 0 14px;
-    font-family:'Fraunces',Georgia,serif;font-weight:400;font-variation-settings:'opsz' 144;
-    font-size:clamp(30px,3.1vw,56px);line-height:.98;letter-spacing:-.02em;text-transform:uppercase;
+    font-family:'Fraunces',Georgia,serif;font-weight:400;font-variation-settings:'opsz' 48;
+    font-size:clamp(20px,2.1vw,38px);line-height:1.04;letter-spacing:-.005em;text-transform:uppercase;
     min-height:1em;
   }
   .disc-meta{margin:0}
@@ -832,6 +832,22 @@
     .disc-hint{position:relative;right:auto;bottom:auto;display:block;margin:10px 20px 0;text-align:right}
     .disc-fallback{padding:20px 20px 30px}
   }
+
+  /* ---- mobile / touch performance + DNA touch UI ---- */
+  @media (max-width:900px),(pointer:coarse){
+    .bg-glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(255,255,255,.8)}
+    .intro-press span{backdrop-filter:none;-webkit-backdrop-filter:none}
+    .audio-toggle{backdrop-filter:none;-webkit-backdrop-filter:none}
+  }
+  @media (max-width:760px){
+    .disc-title{font-size:21px;margin-bottom:10px}
+    .disc-fb-title{font-size:15px}
+  }
+  .graph-back,.graph-hint{position:absolute;z-index:6;font:10px/1 'Space Mono',monospace;letter-spacing:.14em;text-transform:uppercase}
+  .graph-back{display:none;top:10px;left:14px;padding:9px 12px;border:1px solid rgba(0,0,0,.55);border-radius:999px;background:rgba(255,255,255,.85);color:#000;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .graph-back.show{display:block}
+  .graph-hint{display:none;left:0;right:0;bottom:12px;text-align:center;color:#000;opacity:.55;pointer-events:none}
+  .graph-hint.show{display:block}
 </style>
 </head>
 <body>
@@ -1402,6 +1418,7 @@
   let openFx = null;   // {i,t0,dur} while the clicked disc winds up before the card opens
   let W = 1, H = 1, aspect = 1, narrow = false;
   const isCoarse = window.matchMedia('(pointer:coarse)').matches;
+  if(isCoarse) CFG.renderRadius = 3;
 
   function goTo(i){
     target = clamp(Math.round(i), 0, N-1);
@@ -1794,7 +1811,7 @@
     const r = stage.getBoundingClientRect();
     W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
     const gh = Math.max(1, H - up);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, isCoarse ? 1.5 : 2));
     renderer.setSize(W,H,false);
     aspect = W/H;
     const f0 = Math.tan(CFG.cameraFOV*Math.PI/360);
@@ -2067,7 +2084,7 @@
     let videoLive = false;
     discs.forEach((d,i)=>{
       if(!d.video) return;
-      const near = Math.abs(i-L) <= 2.5;
+      const near = Math.abs(i-L) <= (isCoarse ? 1.2 : 2.5);
       if(near && d.video.paused){ const p = d.video.play(); if(p && p.catch) p.catch(()=>{}); }
       else if(!near && !d.video.paused) d.video.pause();
       if(near && !d.video.paused) videoLive = true;
@@ -2330,6 +2347,8 @@
     const branchEl = document.getElementById('hobbyBranch');
     const branchPlaceholder = document.querySelector('.branch-placeholder');
     let selectedNode = null;
+    let userMoved = false;   // user has dragged/zoomed: keep their view from then on
+    let viewReady = false;   // base view has been applied once
     let fitTimer = 0;
     const FIT_ZOOM_IN = 0.62; 
 
@@ -2400,9 +2419,12 @@
           branchPlaceholder.hidden = false;
         }
       });
+    if(window.matchMedia('(pointer:coarse)').matches){
+      try{ Graph.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); }catch(e){}
+    }
     Graph.controls().autoRotate = true;
     Graph.controls().autoRotateSpeed = 0.35;
-    Graph.controls().addEventListener('start', ()=>{ Graph.controls().autoRotate = false; });
+    Graph.controls().addEventListener('start', ()=>{ Graph.controls().autoRotate = false; userMoved = true; });
 
     if(window.IntersectionObserver){
       new IntersectionObserver(entries=>{
@@ -2416,23 +2438,46 @@
     Graph.d3Force('charge').strength(-48);
     Graph.d3Force('link').distance(link=> link.group==='sat' ? 34 : 72);
 
+    /* Home view is computed from the nodes' actual bounds + the current canvas size every time
+       it is needed (no stored/stale camera, no zoomToFit tween). */
     let lastFitW = 0, lastFitH = 0;
-    function fitGraph(){
-      const camera = Graph.camera && Graph.camera();
-      if(!camera){ Graph.zoomToFit(700, 30); return; }
-
-      Graph.zoomToFit(0, 30);
-      const target = camera.position.clone().multiplyScalar(FIT_ZOOM_IN);
-      Graph.cameraPosition(target, undefined, 700);
+    const FIT_MARGIN = 0.8;           // <1 = tighter, >1 = further away
+    function resetView(){
+      const cam = Graph.camera && Graph.camera();
+      const w = el.clientWidth, h = el.clientHeight;
+      if(!cam || !w || !h) return;
+      Graph.width(w).height(h);
+      let cx = 0, cy = 0, cz = 0, c = 0;
+      nodes.forEach(n=>{
+        if(typeof n.x === 'number' && typeof n.y === 'number' && typeof n.z === 'number'){ cx += n.x; cy += n.y; cz += n.z; c++; }
+      });
+      if(!c) return;
+      cx /= c; cy /= c; cz /= c;
+      let R = 0;
+      nodes.forEach(n=>{
+        if(typeof n.x === 'number') R = Math.max(R, Math.hypot(n.x - cx, n.y - cy, n.z - cz));
+      });
+      R += 10;
+      const vf = cam.fov * Math.PI / 180;
+      const hf = 2 * Math.atan(Math.tan(vf / 2) * (w / h));
+      const dist = (R / Math.sin(Math.min(vf, hf) / 2)) * FIT_MARGIN;
+      Graph.cameraPosition({x:cx, y:cy, z:cz + dist}, {x:cx, y:cy, z:cz}, 0);
+      viewReady = true;
     }
+    function ensureView(){ if(!viewReady) resetView(); }   // base view only the first time; later the camera is left as the user had it
+    function fitGraph(){
+      if(userMoved || el.classList.contains('is-visible')) return;   // never move the view while it is being used
+      resetView();
+    }
+    Graph.onEngineStop(fitGraph);
     function resize(){
       const w = el.clientWidth, h = el.clientHeight;
       Graph.width(w).height(h);
-
       if(w === lastFitW && h === lastFitH) return;
+      if(w === lastFitW && Math.abs(h - lastFitH) < 120 && lastFitW) { lastFitH = h; return; }   // mobile URL-bar resize
       lastFitW = w; lastFitH = h;
       window.clearTimeout(fitTimer);
-      fitTimer = window.setTimeout(fitGraph,120);
+      fitTimer = window.setTimeout(fitGraph,160);
     }
     window.addEventListener('resize', resize);
     resize();
@@ -2448,9 +2493,10 @@
       if(!camera || !renderer || typeof THREE === 'undefined') return [];
       const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
       if(!w || !h) return [];
+      camera.updateMatrixWorld();
       const hw = w/2, hh = h/2;
       const pts = [];
-      nodes.forEach(n=>{
+      nodes.forEach((n,ni)=>{
         if(typeof n.x !== 'number' || typeof n.y !== 'number' || typeof n.z !== 'number') return;
         const v = new THREE.Vector3(n.x, n.y, n.z);
         v.project(camera);
@@ -2458,13 +2504,18 @@
         pts.push({
           x: v.x*hw + hw,
           y: -(v.y*hh) + hh,
-          group: n.group
+          group: n.group,
+          i: ni
         });
       });
       return pts;
     }
+    function getGraphLinks(){
+      const ix = o => (o && typeof o === 'object') ? nodes.indexOf(o) : nodes.findIndex(x => x.id === o);
+      return links.map(l => [ix(l.source), ix(l.target)]).filter(l => l[0] >= 0 && l[1] >= 0);
+    }
 
-    window.__hobbyGraph = { fit: fitGraph, resize, getNodeScreenPositions };
+    window.__hobbyGraph = { fit: fitGraph, resize, resetView, ensureView, getNodeScreenPositions, getGraphLinks };
   })();
 
   (function(){
@@ -2473,7 +2524,9 @@
     const graphEl = document.getElementById('graph3d');
     if(!canvas || !wrap || !graphEl) return;
     const ctx = canvas.getContext('2d');
-    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const TOUCH = window.matchMedia('(pointer:coarse)').matches;
+    const LITE = TOUCH || window.innerWidth <= 760;
+    const DPR = Math.min(window.devicePixelRatio || 1, LITE ? 1.5 : 2);
     let W = 0, H = 0;
 
     function resize(){
@@ -2503,17 +2556,22 @@
       visible = true;
     }
 
-    const RUNGS = 100;
+    const RUNGS = LITE ? 56 : 100;
     const TURNS = 4.5;
     const RADIUS_FACTOR = 0.15;
-    const DUST_COUNT = 140;
-    const SUB_PER_RUNG = 2;
+    const DUST_COUNT = LITE ? 50 : 140;
+    const SUB_PER_RUNG = LITE ? 1 : 2;
     const TILT_DEG = -16;
     const TILT_RAD = TILT_DEG * Math.PI / 180;
     let t = 0;
+    let lastT = 0;
     let raf = 0;
-    const SPLIT_MS = 340;
-    const REFORM_MS = 260;
+    const SPLIT_MS = 2400;
+    const REFORM_MS = 1900;
+    const SPAN = 0.6;
+    const sm = (a,b,x)=>{ x = Math.min(1,Math.max(0,(x-a)/(b-a))); return x*x*(3-2*x); };
+    const ease3 = x => x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x+2,3)/2;
+    let morph = {pts:[], links:[]};
 
     let camScale = 1, camTilt = 0, camSpin = 0;
     function updateScrollCamera(){
@@ -2548,7 +2606,7 @@
     let dust = [];
     let rungJitter = [];
     let ambientDust = [];
-    const AMBIENT_COUNT = 46;
+    const AMBIENT_COUNT = LITE ? 16 : 46;
 
     function initDust(){
       dust = [];
@@ -2670,7 +2728,7 @@
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         ctx.shadowColor = 'rgba(160,220,255,0.95)';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = LITE ? 0 : 12;
         ctx.strokeStyle = 'rgba(170,225,255,0.85)';
         ctx.lineWidth = 1.7;
         ctx.beginPath();
@@ -2727,7 +2785,7 @@
       glitchUntil = now + 90 + Math.random() * 90;
     }
     function drawGlitch(now){
-      if(now >= glitchUntil) return;
+      if(LITE || now >= glitchUntil) return;
       const w = canvas.width, h = canvas.height;
       if(w < 2 || h < 2) return;
       glitchSnap.width = w; glitchSnap.height = h;
@@ -2779,6 +2837,13 @@
       const depth = (z + 1) / 2;
       const size = base * (0.55 + depth * 0.85);
       const alpha = (0.4 + depth * 0.55) * (0.85 + 0.3 * (pulse === undefined ? 1 : pulse));
+      if(LITE){
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, 6.2832);
+        ctx.fillStyle = accent ? `rgba(110,110,110,${alpha.toFixed(2)})` : `rgba(15,15,15,${alpha.toFixed(2)})`;
+        ctx.fill();
+        return;
+      }
       const shine = accent ? '150,150,150' : '55,55,55';
       
       ctx.beginPath();
@@ -2840,6 +2905,7 @@
     }
 
     function drawAtmosphere(cx, cy, radius, strandHeight){
+      if(LITE) return;
       const glowR = Math.max(radius * 3.2, strandHeight * 0.42);
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
       glow.addColorStop(0, 'rgba(255,255,255,0.05)');
@@ -2850,7 +2916,7 @@
     }
 
     function drawGrain(){
-      if(!grainPattern) return;
+      if(LITE || !grainPattern) return;
       ctx.save();
       ctx.globalAlpha = 0.035;
       ctx.fillStyle = grainPattern;
@@ -2918,10 +2984,15 @@
         const pulse = 0.5 + 0.5 * Math.sin(yFrac * 9 - t * 2.4);
         if(i % 2 === 0){
           const rungAlpha = (0.08 + 0.12 * ((z1 + 1) / 2)) * (0.8 + 0.4 * pulse);
-          const grad = ctx.createLinearGradient(x1, y, x2, y);
-          grad.addColorStop(0, `rgba(0,0,0,${rungAlpha.toFixed(3)})`);
-          grad.addColorStop(0.5, `rgba(95,95,95,${(rungAlpha * 1.3).toFixed(3)})`);
-          grad.addColorStop(1, `rgba(0,0,0,${rungAlpha.toFixed(3)})`);
+          let grad;
+          if(LITE){
+            grad = `rgba(40,40,40,${rungAlpha.toFixed(3)})`;
+          } else {
+            grad = ctx.createLinearGradient(x1, y, x2, y);
+            grad.addColorStop(0, `rgba(0,0,0,${rungAlpha.toFixed(3)})`);
+            grad.addColorStop(0.5, `rgba(95,95,95,${(rungAlpha * 1.3).toFixed(3)})`);
+            grad.addColorStop(1, `rgba(0,0,0,${rungAlpha.toFixed(3)})`);
+          }
           ctx.strokeStyle = grad;
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -2959,7 +3030,7 @@
     }
 
     function drawAberration(x, y, size, arc){
-      if(arc < 0.05) return;
+      if(LITE || arc < 0.05) return;
       const off = arc * 1.6;
       const a = Math.min(0.35, arc * 0.3);
       ctx.beginPath();
@@ -2973,213 +3044,274 @@
     }
 
     function frame(now){
-      if(!visible){ raf = 0; return; }
+      if(!visible || document.hidden){ raf = 0; return; }
       if(!W || !H){ raf = requestAnimationFrame(frame); return; }
+      if(LITE && state === 'idle' && now - lastT < 28){ raf = requestAnimationFrame(frame); return; }
+      const dtf = Math.min(3, Math.max(0.5, (now - lastT) / 16.667));
+      lastT = now;
 
       mouseTiltX += (mouseTargetX - mouseTiltX) * 0.04;
       mouseTiltY += (mouseTargetY - mouseTiltY) * 0.04;
       scrollSpinBoost *= 0.9;
 
       if(state === 'idle'){
-        t += 0.011 + scrollSpinBoost * 0.02;
+        t += (0.011 + scrollSpinBoost * 0.02) * dtf;
         breath = 1 + Math.sin(t * 0.6) * 0.035;
         updateScrollCamera();
         drawHelix(1);
-      } else if(state === 'splitting'){
-        const elapsed = now - stateStart;
-        const p = Math.min(1, elapsed / SPLIT_MS);
-        const ease = 1 - Math.pow(1 - p, 3);
-
-        const shakeT = Math.max(0, 1 - elapsed / 150);
-        const shakeEnv = shakeT * shakeT;
-        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-        ctx.clearRect(0, 0, W, H);
-        ctx.save();
-        if(shakeEnv > 0){
-          ctx.translate(Math.sin(elapsed * 0.09) * 7 * shakeEnv, Math.cos(elapsed * 0.13) * 7 * shakeEnv);
-        }
-        const {cx, cy, radius, strandHeight} = strandGeometry();
-
-        applyTilt(cx, cy, (TILT_RAD + camTilt + mouseTiltX * 0.09) * (1 - ease));
-        const arc = Math.sin(ease * Math.PI);
-        particles.forEach(pt=>{
-          let x, y, size, alpha;
-          if(pt.hasTarget){
-            x = pt.x + (pt.tx - pt.x) * ease + pt.vx * arc * 46;
-            y = pt.y + (pt.ty - pt.y) * ease + pt.vy * arc * 46;
-            size = pt.size * (1 + arc * 0.9);
-            alpha = 0.35 + ease * 0.65;
-          } else {
-            x = pt.x + pt.vx * ease * 160;
-            y = pt.y + pt.vy * ease * 160;
-            size = pt.size * (1 + ease * 1.8);
-            alpha = Math.max(0, 1 - ease);
+      } else if(state === 'splitting' || state === 'reforming'){
+        const rev = state === 'reforming';
+        const p = Math.min(1, (now - stateStart) / (rev ? REFORM_MS : SPLIT_MS));
+        drawMorph(now, p, rev);
+        if(!rev){
+          canvas.style.opacity = String(1 - sm(0.8, 1, p));
+          if(p >= 0.72 && !graphEl.classList.contains('is-visible')){
+            graphEl.classList.add('is-visible');
+            graphEl.style.pointerEvents = 'auto';
           }
-          drawAberration(x, y, size, arc);
-          ctx.globalAlpha = alpha;
-          ctx.beginPath();
-          ctx.arc(x, y, size, 0, Math.PI * 2);
-          ctx.fillStyle = pt.color;
-          ctx.fill();
-        });
-        ctx.globalAlpha = 1;
-
-        drawRings(now, cx, cy, Math.max(radius * 4, strandHeight * 0.5));
-        drawBolts(now);
-        ctx.restore();
-        drawGlitch(now);
-        if(p >= 0.7 && !graphEl.classList.contains('is-visible')){
-          graphEl.classList.add('is-visible');
-          graphEl.style.pointerEvents = 'auto';
-        }
-        if(p >= 1){
-          state = 'revealed';
-          canvas.style.opacity = '0';
-          canvas.style.pointerEvents = 'none';
-          window.setTimeout(()=>{
-            if(state === 'revealed') canvas.style.display = 'none';
-          }, 260);
-        }
-      } else if(state === 'reforming'){
-        const elapsed = now - stateStart;
-        const p = Math.min(1, elapsed / REFORM_MS);
-        const ease = 1 - Math.pow(1 - p, 3);
-        const shakeT = Math.max(0, 1 - elapsed / 120);
-        const shakeEnv = shakeT * shakeT;
-        if(particles.length){
-          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-          ctx.clearRect(0, 0, W, H);
-          ctx.save();
-          if(shakeEnv > 0){
-            ctx.translate(Math.sin(elapsed * 0.1) * 5 * shakeEnv, Math.cos(elapsed * 0.14) * 5 * shakeEnv);
+          if(p >= 1){
+            state = 'revealed';
+            canvas.style.display = 'none';
+            canvas.style.pointerEvents = 'none';
+            reconcile();
           }
-          const {cx, cy, radius, strandHeight} = strandGeometry();
-
-          applyTilt(cx, cy, (TILT_RAD + camTilt + mouseTiltX * 0.09) * ease);
-          const arc = Math.sin(ease * Math.PI);
-          particles.forEach(pt=>{
-            const x = pt.x + (pt.tx - pt.x) * ease + pt.vx * arc * 46;
-            const y = pt.y + (pt.ty - pt.y) * ease + pt.vy * arc * 46;
-            const size = pt.size * (1 + arc * 0.7);
-            drawAberration(x, y, size, arc);
-            ctx.globalAlpha = 0.4 + ease * 0.6;
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fillStyle = pt.color;
-            ctx.fill();
-          });
-          ctx.globalAlpha = 1;
-          drawRings(now, cx, cy, Math.max(radius * 4, strandHeight * 0.5));
-          drawBolts(now);
-          ctx.restore();
         } else {
-          drawHelix(p);
+          canvas.style.opacity = String(sm(0, 0.12, p));
+          if(p >= 1){ state = 'idle'; particles.length = 0; canvas.style.opacity = '1'; reconcile(); }
         }
-        if(p >= 1){ state = 'idle'; particles.length = 0; }
       }
       raf = requestAnimationFrame(frame);
     }
 
+    function helixHomes(){
+      const {cx, radius, strandHeight, top} = strandGeometry();
+      const out = [];
+      for(let i = 0; i < RUNGS; i++){
+        const yFrac = i / (RUNGS - 1) + spacingWobble[i];
+        const y = top + yFrac * strandHeight;
+        const ang = yFrac * Math.PI * TURNS + t + camSpin;
+        const rT = radius * taperAt(yFrac), row = i / (RUNGS - 1), k = out.length;
+        out.push({x: cx + Math.cos(ang) * rT, y, row, size: 2.2, color: 'rgba(0,0,0,0.62)', pair: i % 2 === 0 ? k + 1 : -1});
+        out.push({x: cx + Math.cos(ang + Math.PI) * rT, y, row, size: 2.2, color: 'rgba(60,60,60,0.5)', pair: -1});
+      }
+      dust.forEach(d=>{
+        const ang = d.angleOffset + t * d.speed;
+        out.push({x: cx + Math.cos(ang) * radius * d.radiusScale, y: top + d.yFrac * strandHeight, row: d.yFrac, size: d.size * 0.9, color: 'rgba(0,0,0,0.4)', pair: -1});
+      });
+      return out;
+    }
+
+    const smoother = q => q*q*q*(q*(6*q-15)+10);
+    function flow(pt, q, o){
+      const e = smoother(q), env = Math.sin(Math.PI * e);
+      const w = env * pt.amp * Math.sin(e * pt.turns + pt.ph);
+      o.x = pt.x + (pt.tx - pt.x) * e + pt.nx * w;
+      o.y = pt.y + (pt.ty - pt.y) * e + pt.ny * w - env * pt.lift;
+    }
+
+    function buildMorph(rev){
+      const G = window.__hobbyGraph || {};
+      if(G.ensureView) G.ensureView();
+      const pts = G.getNodeScreenPositions ? G.getNodeScreenPositions() : [];
+      const links = (pts.length && G.getGraphLinks) ? G.getGraphLinks() : [];
+      const byIdx = {};
+      pts.forEach((n, k)=>{ n.arrive = 9; byIdx[n.i] = k; });
+      morph = {pts, links: []};
+      particles.length = 0;
+      helixHomes().forEach((h, k)=>{
+        const n = pts.length ? pts[(k * 13 + 3) % pts.length] : null;
+        const a = Math.random() * 6.2832, r = 3 + Math.random() * 10;
+        const nx = n ? n.x + Math.cos(a) * r : h.x + (Math.random() - .5) * 220;
+        const ny = n ? n.y + Math.sin(a) * r : h.y + (Math.random() - .5) * 220;
+        const fx = rev ? nx : h.x, fy = rev ? ny : h.y, tx = rev ? h.x : nx, ty = rev ? h.y : ny;
+        const start = rev ? 0.1 + (1 - h.row) * 0.22 + Math.random() * 0.05 : 0.12 + h.row * 0.22 + Math.random() * 0.05;
+        const dx = tx - fx, dy = ty - fy, len = Math.hypot(dx, dy) || 1;
+        particles.push({
+          x: fx, y: fy, tx, ty, X: fx, Y: fy, q: 0, nx: -dy / len, ny: dx / len,
+          amp: (14 + len * 0.16) * (0.6 + Math.random() * 0.7) * (k % 2 ? 1 : -1),
+          turns: 6.2832 * (1.1 + Math.random() * 0.5), lift: 22 + Math.random() * 28,
+          start, size: h.size, color: h.color, pair: h.pair, ph: Math.random() * 6.2832
+        });
+        if(n){ const arr = start + SPAN * 0.85; if(arr < n.arrive) n.arrive = arr; }
+      });
+      pts.forEach(n=>{ if(n.arrive === 9) n.arrive = 0.8; });
+      links.forEach(l=>{
+        const a = byIdx[l[0]], b = byIdx[l[1]];
+        if(a === undefined || b === undefined) return;
+        morph.links.push([pts[a], pts[b], (Math.random() - .5) * 0.3 * Math.hypot(pts[b].x - pts[a].x, pts[b].y - pts[a].y)]);
+      });
+    }
+
+    function drawMorph(now, p, rev){
+      const {cx, cy, radius} = strandGeometry();
+      const hx = rev && p > 0.8 ? sm(0.8, 1, p) : 0;
+      if(hx > 0) drawHelix(hx); else { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H); }
+      const layer = 1 - hx, o = {x: 0, y: 0};
+      const tf = rev ? sm(0.1, 0.88, p) : 1 - sm(0.1, 0.9, p);
+      ctx.save();
+      applyTilt(cx, cy, (TILT_RAD + camTilt + mouseTiltX * 0.09) * tf);
+      for(const pt of particles){
+        const q = Math.min(1, Math.max(0, (p - pt.start) / SPAN));
+        const l = sm(pt.start - 0.22, pt.start, p) * (1 - sm(0, 0.25, q));
+        pt.q = q; flow(pt, q, o);
+        pt.X = o.x + Math.sin(now * 0.0016 + pt.ph) * 10 * l;
+        pt.Y = o.y + Math.cos(now * 0.0013 + pt.ph * 1.3) * 8 * l - 10 * l;
+      }
+      if(!rev){
+        ctx.lineWidth = 1;
+        particles.forEach((a, k)=>{
+          if(a.pair <= k) return;
+          const b = particles[a.pair], al = (1 - sm(0.12, 0.4, p)) * Math.max(0, 1 - Math.hypot(a.X - b.X, a.Y - b.Y) / (radius * 2.4)) * 0.45 * layer;
+          if(al < 0.01) return;
+          ctx.strokeStyle = `rgba(0,0,0,${al.toFixed(3)})`; ctx.beginPath(); ctx.moveTo(a.X, a.Y); ctx.lineTo(b.X, b.Y); ctx.stroke();
+        });
+      }
+      ctx.lineCap = 'round';
+      const N = LITE ? 2 : 4;
+      for(const pt of particles){
+        const arc = Math.sin(pt.q * Math.PI), size = pt.size * (1 + arc * 0.6);
+        if(pt.q > 0.02 && pt.q < 1){
+          let ax = pt.X, ay = pt.Y;
+          ctx.strokeStyle = pt.color;
+          for(let k = 1; k <= N; k++){
+            flow(pt, Math.max(0, pt.q - k * 0.03), o);
+            ctx.globalAlpha = layer * 0.34 * (1 - k / (N + 1)); ctx.lineWidth = size * (1.2 - k * 0.2);
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(o.x, o.y); ctx.stroke(); ax = o.x; ay = o.y;
+          }
+        }
+        ctx.globalAlpha = layer;
+        if(arc > 0.05 && !LITE){
+          ctx.beginPath(); ctx.arc(pt.X, pt.Y, size * 3.2, 0, 6.2832);
+          ctx.fillStyle = `rgba(201,120,80,${(0.09 * arc * layer).toFixed(3)})`; ctx.fill();
+        }
+        drawAberration(pt.X, pt.Y, size, arc * 0.6);
+        ctx.beginPath(); ctx.arc(pt.X, pt.Y, size, 0, 6.2832); ctx.fillStyle = pt.color; ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      ctx.lineWidth = 1;
+      for(const [a, b, sag] of morph.links){
+        const m = Math.max(a.arrive, b.arrive);
+        const f = rev ? 1 - sm(0, 0.3, p) : sm(m - 0.02, m + 0.2, p);
+        if(f <= 0.003) continue;
+        const mx = (a.x + b.x) / 2 - (b.y - a.y) * sag / 100, my = (a.y + b.y) / 2 + (b.x - a.x) * sag / 100;
+        let px = a.x, py = a.y;
+        ctx.strokeStyle = `rgba(0,0,0,${(0.28 * layer).toFixed(3)})`; ctx.beginPath(); ctx.moveTo(px, py);
+        for(let k = 1; k <= 8; k++){
+          const s2 = f * k / 8, u = 1 - s2;
+          px = u * u * a.x + 2 * u * s2 * mx + s2 * s2 * b.x; py = u * u * a.y + 2 * u * s2 * my + s2 * s2 * b.y;
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        if(f < 0.995){ ctx.beginPath(); ctx.arc(px, py, 2.2, 0, 6.2832); ctx.fillStyle = `rgba(201,120,80,${(0.85 * layer).toFixed(3)})`; ctx.fill(); }
+      }
+      for(const n of morph.pts){
+        const f = rev ? 0 : sm(n.arrive, n.arrive + 0.2, p), vis = rev ? 1 - sm(0.05, 0.4, p) : (f > 0 ? 1 : 0);
+        if(!vis) continue;
+        if(f > 0 && f < 1 && !LITE){
+          const R = 8 + f * 34, g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, R);
+          g.addColorStop(0, `rgba(201,120,80,${((1 - f) * 0.4).toFixed(3)})`); g.addColorStop(1, 'rgba(201,120,80,0)');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(n.x, n.y, R, 0, 6.2832); ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(n.x, n.y, 3.4 * (rev ? vis : 0.4 + 0.6 * f), 0, 6.2832);
+        ctx.fillStyle = `rgba(0,0,0,${(0.55 * layer).toFixed(3)})`; ctx.fill();
+      }
+    }
+
     function beginSplit(){
       if(state !== 'idle') return;
-      if(W < 40 || H < 40) resize(); 
+      if(W < 40 || H < 40) resize();
       if(W < 40 || H < 40) return;
+      canvas.style.transition = 'none';
       canvas.style.display = 'block';
       canvas.style.pointerEvents = 'auto';
       canvas.style.opacity = '1';
+      buildMorph(false);
       state = 'splitting';
       stateStart = performance.now();
-      glitchUntil = stateStart + 120;
-      activeRings.push({ bornAt: stateStart, life: 700 });
-      particles.length = 0;
-      const {cx, radius, strandHeight, top} = strandGeometry();
-      const nodePts = (window.__hobbyGraph && window.__hobbyGraph.getNodeScreenPositions)
-        ? window.__hobbyGraph.getNodeScreenPositions() : [];
-      let idx = 0;
-      for(let i = 0; i < RUNGS; i++){
-        const yFrac = i / (RUNGS - 1);
-        const y = top + yFrac * strandHeight;
-        const angle = yFrac * Math.PI * TURNS + t + camSpin;
-        [
-          [angle, 'rgba(0,0,0,0.62)'],
-          [angle + Math.PI, 'rgba(0,0,0,0.5)']
-        ].forEach(([a, color])=>{
-          const x = cx + Math.cos(a) * radius;
-          const vx = Math.cos(a) + (Math.random() - 0.5) * 0.4;
-          const vy = Math.sin(a) * 0.3 + (Math.random() - 0.5) * 0.5 - 0.35;
-          const target = pickNodeTarget(nodePts, idx++);
-          particles.push({
-            x, y, vx, vy, size: 2.2, color,
-            hasTarget: !!target,
-            tx: target ? target.x : x, ty: target ? target.y : y
-          });
-        });
-      }
-      dust.forEach(d=>{
-        const angle = d.angleOffset + t * d.speed;
-        const r = radius * d.radiusScale;
-        const x = cx + Math.cos(angle) * r;
-        const y = top + d.yFrac * strandHeight;
-        const vx = Math.cos(angle) * 0.85 + (Math.random() - 0.5) * 0.6;
-        const vy = Math.sin(angle) * 0.25 + (Math.random() - 0.5) * 0.55 - 0.25;
-        const target = pickNodeTarget(nodePts, idx++);
-        particles.push({
-          x, y, vx, vy, size: d.size * 0.9, color: 'rgba(0,0,0,0.4)',
-          hasTarget: !!target,
-          tx: target ? target.x : x, ty: target ? target.y : y
-        });
-      });
     }
 
     function beginReform(){
       if(state !== 'revealed') return;
       if(W < 40 || H < 40) resize();
+      canvas.style.transition = 'none';
       canvas.style.display = 'block';
-      canvas.style.opacity = '1';
+      canvas.style.opacity = '0';
       graphEl.classList.remove('is-visible');
       graphEl.style.pointerEvents = 'none';
+      buildMorph(true);
       state = 'reforming';
       stateStart = performance.now();
-      glitchUntil = stateStart + 90;
-
-      const nodePts = (window.__hobbyGraph && window.__hobbyGraph.getNodeScreenPositions)
-        ? window.__hobbyGraph.getNodeScreenPositions() : [];
-      particles.length = 0;
-      const {cx, radius, strandHeight, top} = strandGeometry();
-      const homes = [];
-      for(let i = 0; i < RUNGS; i++){
-        const yFrac = i / (RUNGS - 1);
-        const y = top + yFrac * strandHeight;
-        const angle = yFrac * Math.PI * TURNS + t + camSpin;
-        homes.push({ x: cx + Math.cos(angle) * radius, y, size: 2.2, color: 'rgba(0,0,0,0.62)' });
-        homes.push({ x: cx + Math.cos(angle + Math.PI) * radius, y, size: 2.2, color: 'rgba(128,128,128,0.5)' });
-      }
-      dust.forEach(d=>{
-        const angle = d.angleOffset + t * d.speed;
-        const r = radius * d.radiusScale;
-        homes.push({
-          x: cx + Math.cos(angle) * r,
-          y: top + d.yFrac * strandHeight,
-          size: d.size * 0.9,
-          color: 'rgba(0,0,0,0.4)'
-        });
-      });
-      homes.forEach((home, i)=>{
-        const src = nodePts.length ? nodePts[i % nodePts.length] : null;
-        const sx = src ? src.x : home.x + (Math.random() - 0.5) * 140;
-        const sy = src ? src.y : home.y + (Math.random() - 0.5) * 140;
-        particles.push({
-          x: sx, y: sy,
-          tx: home.x, ty: home.y,
-          vx: (Math.random() - 0.5), vy: (Math.random() - 0.5) - 0.2,
-          size: home.size, color: home.color
-        });
-      });
     }
 
+    /* ---- helix <-> graph: desired state + reconcile (no lost enter/leave, no flicker) ---- */
+    let wantGraph = false;
+    let hintEl = null, backBtn = null;
+    if(TOUCH){
+      hintEl = document.createElement('div');
+      hintEl.className = 'graph-hint';
+      hintEl.textContent = 'tap to explore';
+      backBtn = document.createElement('button');
+      backBtn.type = 'button';
+      backBtn.className = 'graph-back';
+      backBtn.textContent = '\u2190 back to dna';
+      wrap.appendChild(hintEl);
+      wrap.appendChild(backBtn);
+      backBtn.addEventListener('click', ()=> setWant(false));
+    }
+    function syncUI(){
+      if(!TOUCH) return;
+      hintEl.classList.toggle('show', !wantGraph);
+      backBtn.classList.toggle('show', wantGraph);
+    }
+    function reconcile(){
+      if(wantGraph && state === 'idle') beginSplit();
+      else if(!wantGraph && state === 'revealed') beginReform();
+    }
+    function setWant(v){
+      wantGraph = v;
+      syncUI();
+      reconcile();
+    }
+    function resetToHelix(){
+      wantGraph = false;
+      state = 'idle';
+      particles.length = 0;
+      canvas.style.display = 'block';
+      canvas.style.opacity = '1';
+      canvas.style.pointerEvents = 'auto';
+      graphEl.classList.remove('is-visible');
+      graphEl.style.pointerEvents = 'none';
+      syncUI();
+      if(visible && !raf) raf = requestAnimationFrame(frame);
+    }
+    /* touch: tapping the helix opens the graph and it STAYS until "back" or scrolling away.
+       (pointerenter/leave fire on every touch down/up, which caused the helix->graph->helix flip) */
+    wrap.addEventListener('pointerenter', e=>{ if(e.pointerType === 'touch') return; setWant(true); });
+    wrap.addEventListener('pointerleave', e=>{ if(e.pointerType === 'touch') return; setWant(false); });
+    if(TOUCH){
+      let tap = null;
+      canvas.addEventListener('pointerdown', e=>{
+        if(e.pointerType !== 'touch') return;
+        tap = {x:e.clientX, y:e.clientY, at:performance.now()};
+      }, {passive:true});
+      canvas.addEventListener('pointerup', e=>{
+        if(e.pointerType !== 'touch' || !tap) return;
+        const moved = Math.hypot(e.clientX - tap.x, e.clientY - tap.y);
+        const quick = performance.now() - tap.at < 500;
+        tap = null;
+        if(moved < 10 && quick) setWant(true);
+      });
+      canvas.addEventListener('pointercancel', ()=>{ tap = null; });   // fires when the page starts scrolling
+      if(window.IntersectionObserver){
+        new IntersectionObserver(entries=>{
+          entries.forEach(en=>{ if(!en.isIntersecting && state !== 'idle') resetToHelix(); });
+        }, {threshold:0}).observe(wrap);
+      }
+      syncUI();
+    }
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && visible && !raf) raf = requestAnimationFrame(frame); });
     raf = requestAnimationFrame(frame);
-    wrap.addEventListener('pointerenter', beginSplit);
-    wrap.addEventListener('pointerleave', beginReform);
   })();
 
   const cursorLens = document.createElement('span');
