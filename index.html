@@ -160,6 +160,9 @@
     transform:translateY(0) scale(1.06);
     text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 18px rgba(255,255,255,.35);
   }
+  .intro-screen.intro-mobile .intro-quote-avatar,
+  .intro-screen.intro-mobile .intro-quote-skill,
+  .intro-screen.intro-mobile .intro-quote-text{display:none}
   .intro-screen.is-started .intro-press{opacity:0;pointer-events:none;animation:none}
   @media(max-width:600px){
     .intro-quote{gap:10px}
@@ -871,6 +874,42 @@
     const quoteText = document.getElementById('introQuoteText');
     if(!intro){ document.documentElement.classList.remove('intro-locked'); return; }
 
+    /* touch devices: skip the volition quote; one tap = "continue" AND the user gesture that unlocks goodlife audio */
+    if(window.matchMedia('(pointer:coarse)').matches){
+      intro.classList.add('intro-mobile');
+      const label = intro.querySelector('.intro-press span');
+      if(label) label.textContent = 'touch to continue';
+      let done = false;
+      const go = () => {
+        if(done) return;
+        done = true;
+        const video = document.getElementById('bgVideo');
+        const toggle = document.getElementById('audioToggle');
+        const setUI = (muted) => {
+          if(!toggle) return;
+          toggle.classList.toggle('is-muted', muted);
+          toggle.setAttribute('aria-pressed', String(!muted));
+        };
+        if(video){
+          // must happen synchronously inside the tap, or mobile browsers keep the video muted
+          video.muted = false;
+          video.volume = 1;
+          try{ video.currentTime = 0; }catch(e){}
+          const p = video.play();
+          setUI(false);
+          if(p && p.catch) p.catch(() => { video.muted = true; setUI(true); video.play().catch(() => {}); });
+        }
+        intro.classList.add('is-started', 'is-leaving');
+        document.documentElement.classList.remove('intro-locked');
+        document.dispatchEvent(new Event('introended'));
+        setTimeout(() => { if(intro.parentNode) intro.parentNode.removeChild(intro); }, 950);
+      };
+      intro.addEventListener('click', go);
+      document.addEventListener('click', go);
+      document.addEventListener('keydown', go);
+      return;
+    }
+
     let wordEls = [];
     if(quoteText){
       const words = quoteText.textContent.trim().split(/\s+/);
@@ -1485,7 +1524,7 @@
 
   /* studio lighting: soft key, cool rim, generated reflection map */
   scene.add(new THREE.AmbientLight(0xffffff,.35));
-  const key = new THREE.DirectionalLight(0xFFF9E8,.75); key.position.set(3.5,5,6); scene.add(key);
+  const key = new THREE.DirectionalLight(0xFFF9E8,1.1); key.position.set(3.5,5,6); scene.add(key);
   const fill = new THREE.DirectionalLight(0xffffff,.3); fill.position.set(-4,1,4); scene.add(fill);
   const rim = new THREE.DirectionalLight(0x499FF5,.75); rim.position.set(4,2,-5); scene.add(rim);
 
@@ -1493,15 +1532,18 @@
     const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
     const x = c.getContext('2d');
     const g = x.createLinearGradient(0,0,0,512);
-    g.addColorStop(0,'#f2f4f8'); g.addColorStop(.45,'#98a0b0'); g.addColorStop(.55,'#5b6272'); g.addColorStop(1,'#1d2027');
+    g.addColorStop(0,'#2a3040'); g.addColorStop(.5,'#11141c'); g.addColorStop(1,'#07080c');
     x.fillStyle = g; x.fillRect(0,0,1024,512);
-    const blob = (cx,cy,r,col,a)=>{
-      const rg = x.createRadialGradient(cx,cy,0,cx,cy,r);
-      rg.addColorStop(0,col); rg.addColorStop(1,'rgba(255,255,255,0)');
-      x.globalAlpha = a; x.fillStyle = rg; x.fillRect(cx-r,cy-r,2*r,2*r); x.globalAlpha = 1;
+    // soft-boxes: bright rectangles with a glow, like a product-photo studio
+    const box = (px,py,w,h,col,glow)=>{
+      x.save(); x.shadowColor = col; x.shadowBlur = glow; x.fillStyle = col;
+      x.fillRect(px,py,w,h); x.fillRect(px,py,w,h); x.restore();
     };
-    blob(220,130,150,'#ffffff',1); blob(720,90,120,'#fff2d2',1);
-    blob(520,330,170,'#8fbfff',.55); blob(900,260,110,'#ffffff',.6);
+    box(140,70,70,300,'#ffffff',60);      // tall key strip
+    box(470,40,260,34,'#fff1d6',50);      // warm overhead bar
+    box(840,110,46,260,'#9cc8ff',55);     // cool rim strip
+    box(330,300,150,18,'#ffffff',35);     // low kicker
+    box(640,330,90,12,'#c9a3ff',30);      // violet accent
     const t = new THREE.CanvasTexture(c);
     t.mapping = THREE.EquirectangularReflectionMapping;
     t.encoding = THREE.sRGBEncoding;
@@ -1556,12 +1598,30 @@
   const hubGeo    = ringLathe(rMatrix, hubR, hubT, .22, 160);
   const pickGeo   = new THREE.CircleGeometry(1,24);
 
-  const edgeMat   = new THREE.MeshStandardMaterial({color:0xd7dbe2, metalness:1, roughness:.28, side:THREE.DoubleSide});
-  const backMat   = new THREE.MeshStandardMaterial({color:0xe4e7ec, metalness:.9, roughness:.22});
-  const frostMat  = new THREE.MeshPhysicalMaterial({color:0xb6c0d0, metalness:.15, roughness:.42, transparent:true, opacity:.82, clearcoat:1, clearcoatRoughness:.25, side:THREE.DoubleSide});
-  const matrixMat = new THREE.MeshStandardMaterial({color:0xe6e9ee, metalness:.35, roughness:.4, side:THREE.DoubleSide});
-  const hubMat    = new THREE.MeshPhysicalMaterial({color:0xcfd5df, metalness:.4, roughness:.3, clearcoat:1, clearcoatRoughness:.2, side:THREE.DoubleSide});
+  const edgeMat   = new THREE.MeshStandardMaterial({color:0xeef2f8, metalness:1, roughness:.1, envMapIntensity:1.8, side:THREE.DoubleSide});
+  const backMat   = new THREE.MeshStandardMaterial({color:0xd9dde4, metalness:1, roughness:.12, envMapIntensity:1.5});
+  const frostMat  = new THREE.MeshPhysicalMaterial({color:0xcfe2f7, metalness:0, roughness:.08, transparent:true, opacity:.38, clearcoat:1, clearcoatRoughness:.04, envMapIntensity:1.8, side:THREE.DoubleSide});
+  const matrixMat = new THREE.MeshStandardMaterial({color:0xdfe6ef, metalness:.6, roughness:.18, envMapIntensity:1.4, side:THREE.DoubleSide});
+  const hubMat    = new THREE.MeshPhysicalMaterial({color:0xe3ebf6, metalness:.2, roughness:.1, transparent:true, opacity:.55, clearcoat:1, clearcoatRoughness:.04, envMapIntensity:1.8, side:THREE.DoubleSide});
+  const stackGeo  = ringLathe(hubR, hubR+.035, T*1.9, .55, 160);   // raised stacking ring
+  const stackMat  = new THREE.MeshPhysicalMaterial({color:0xf2f6fc, metalness:.1, roughness:.06, transparent:true, opacity:.5, clearcoat:1, clearcoatRoughness:.03, envMapIntensity:2, side:THREE.DoubleSide});
   const pickMat   = new THREE.MeshBasicMaterial({visible:false, side:THREE.DoubleSide, depthWrite:false});
+
+  /* etched barcode-like ring on the clear hub, as on a real disc */
+  const tickGeo = new THREE.RingGeometry(rFrost, rMatrix, 128, 1);
+  const tickMat = (function(){
+    const c = document.createElement('canvas'); c.width = c.height = 512;
+    const x = c.getContext('2d'); x.translate(256,256);
+    let seed = 7; const rnd = ()=>(seed = (seed*16807)%2147483647)/2147483647;
+    for(let a=0; a<360; a+=.7){
+      if(rnd() < .28) continue;
+      const w = (.18 + rnd()*.35) * Math.PI/180;
+      x.fillStyle = 'rgba(255,255,255,' + (.55 + rnd()*.4).toFixed(2) + ')';
+      x.beginPath(); x.arc(0,0,252,a*Math.PI/180,a*Math.PI/180+w); x.arc(0,0,212,a*Math.PI/180+w,a*Math.PI/180,true); x.fill();
+    }
+    const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding;
+    return new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity:.8, depthWrite:false, side:THREE.DoubleSide});
+  })();
 
   /* ---------------- photo -> disc texture ---------------- */
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
@@ -1776,9 +1836,9 @@
     const spin = new THREE.Group(); g.add(spin);
     const art = makeArt(item,i);
     const frontMat = new THREE.MeshPhysicalMaterial({
-      color:0x707070, map:art.tex, emissive:0xffffff, emissiveMap:art.tex, emissiveIntensity:.9,
-      roughness:.5,
-      metalness:0, clearcoat:.3, clearcoatRoughness:.4, envMapIntensity:.3
+      color:0x8a8a8a, map:art.tex, emissive:0xffffff, emissiveMap:art.tex, emissiveIntensity:.62,
+      roughness:.3,
+      metalness:0, clearcoat:1, clearcoatRoughness:.05, envMapIntensity:1.1
     });
     const front = new THREE.Mesh(faceGeo, frontMat); front.position.z = T/2 + .0006;
     const back  = new THREE.Mesh(faceGeo, backMat);  back.rotation.y = Math.PI; back.position.z = -T/2 - .0006;
@@ -1787,7 +1847,9 @@
     const ov = makeOverlay();
     const ovMesh = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({map:ov.tex, transparent:true, depthWrite:false, toneMapped:false}));
     ovMesh.position.z = T/2 + .0013;
-    spin.add(front, ovMesh, back, lathe(edgeGeo,edgeMat), lathe(frostGeo,frostMat), lathe(matrixGeo,matrixMat), lathe(hubGeo,hubMat), pick);
+    const tF = new THREE.Mesh(tickGeo, tickMat);   tF.position.z = T/2 + .0016;
+    const tB = new THREE.Mesh(tickGeo, tickMat);   tB.rotation.y = Math.PI; tB.position.z = -T/2 - .0016;
+    spin.add(front, ovMesh, back, tF, tB, lathe(edgeGeo,edgeMat), lathe(frostGeo,frostMat), lathe(matrixGeo,matrixMat), lathe(hubGeo,hubMat), lathe(stackGeo,stackMat), pick);
     g.visible = false;
     group.add(g);
     return {item, group:g, spin, art, ov, frontMat, artReady:false, pick, hover:0, openK:0, spinV:0, spinA:0, tx:0, ty:0, e:0, video:null, videoReady:false};
