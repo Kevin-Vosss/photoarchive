@@ -564,7 +564,6 @@
 
     background:transparent;
   }
-  /* loading canvas must never paint a tone/gradient box */
   #lightbox .lb-frame,#lightbox .lb-frame:not(.has-image),#lightbox .lb-stage{background:none !important;box-shadow:none}
 
   .lb-frame img,.lb-frame video{
@@ -582,7 +581,6 @@
     transform:scale(1.06);
   }
 
-  /* photo card "opens" out of the spinning disc */
   #lightbox.lb-anim{animation:lbBgIn .45s ease-out both}
   #lightbox.lb-anim .lb-frame{animation:lbCardIn .95s cubic-bezier(.22,1,.36,1) both}
   #lightbox.lb-anim .lb-nav,#lightbox.lb-anim .lb-cap{animation:lbFadeUp .6s .45s ease-out both}
@@ -595,7 +593,6 @@
   @keyframes lbFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){#lightbox.lb-anim,#lightbox.lb-anim .lb-frame,#lightbox.lb-anim .lb-nav,#lightbox.lb-anim .lb-cap{animation:none}}
 
-  /* small spinning CD loader */
   .lb-loader{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;display:none;pointer-events:none;filter:drop-shadow(0 2px 6px rgba(23,21,28,.35))}
   .lb-frame.lb-loading .lb-loader{display:block}
   .lb-cd{display:block;width:100%;height:100%;animation:cdSpin .9s linear infinite}
@@ -677,7 +674,6 @@
     .project-card{animation:none}
   }
 
-  /* ============ disc archive (replaces the photo grid) ============ */
   .disc-gallery{
     --disc-ink:#000;
     position:relative;
@@ -699,25 +695,12 @@
     header a{pointer-events:auto}
   }
   .disc-warn{position:absolute;left:30px;bottom:64px;z-index:13;max-width:360px;padding:9px 11px;background:#000;color:#fff;font:10px/1.45 'Space Mono',monospace;letter-spacing:.02em}
-  .disc-info{position:absolute;left:30px;top:6px;width:clamp(230px,21vw,405px);z-index:2;pointer-events:none}
-  .disc-title{
-    margin:0 0 14px;
-    font-family:'Fraunces',Georgia,serif;font-weight:400;font-variation-settings:'opsz' 48;
-    font-size:clamp(20px,2.1vw,38px);line-height:1.04;letter-spacing:-.005em;text-transform:uppercase;
-    min-height:1em;
-  }
-  .disc-meta{margin:0}
-  .disc-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-top:1px solid var(--disc-ink);padding:9px 0 8px}
-  .disc-row dt{font:9px/1 'Space Mono',monospace;letter-spacing:.2em;text-transform:uppercase}
-  .disc-row dd{margin:0;text-align:right;font:500 clamp(13px,1.05vw,17px)/1.25 'Inter',Arial,sans-serif;letter-spacing:-.02em}
-  .disc-counter{margin-top:14px;font:10px/1 'Space Mono',monospace;letter-spacing:.14em}
   .disc-hint{position:absolute;right:30px;bottom:20px;z-index:2;pointer-events:none;font:9px/1 'Space Mono',monospace;letter-spacing:.16em;text-transform:uppercase;opacity:.6}
   .disc-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
-  /* no-WebGL fallback: a plain row of round thumbnails */
   .disc-gallery.is-fallback{height:auto;overflow:visible}
   .disc-gallery.is-fallback .disc-stage{position:relative;cursor:auto}
-  .disc-gallery.is-fallback .disc-info,.disc-gallery.is-fallback .disc-hint{display:none}
+  .disc-gallery.is-fallback .disc-hint{display:none}
   .disc-fallback{display:flex;gap:22px;overflow-x:auto;padding:24px 30px 34px}
   .disc-fb-item{flex:0 0 auto;width:190px;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:var(--disc-ink)}
   .disc-fb-face{
@@ -729,20 +712,17 @@
 
   @media(max-width:760px){
     .disc-gallery{margin:0 -20px;width:calc(100% + 40px);height:auto;overflow:visible}
-    .disc-info{position:relative;left:auto;top:auto;width:auto;padding:4px 20px 12px}
     .disc-stage{position:relative;height:min(74vh,150vw)}
     .disc-hint{position:relative;right:auto;bottom:auto;display:block;margin:10px 20px 0;text-align:right}
     .disc-fallback{padding:20px 20px 30px}
   }
 
-  /* ---- mobile / touch performance ---- */
   @media (max-width:900px),(pointer:coarse){
     .bg-glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(255,255,255,.8)}
     .intro-press span{backdrop-filter:none;-webkit-backdrop-filter:none}
     .audio-toggle{backdrop-filter:none;-webkit-backdrop-filter:none}
   }
   @media (max-width:760px){
-    .disc-title{font-size:21px;margin-bottom:10px}
     .disc-fb-title{font-size:15px}
   }
   </style>
@@ -768,7 +748,7 @@
     const quoteText = document.getElementById('introQuoteText');
     if(!intro){ document.documentElement.classList.remove('intro-locked'); return; }
 
-    /* touch devices: skip the volition quote; one tap = "continue" AND the user gesture that unlocks goodlife audio */
+    /* touch devices skip the quote; one tap continues and unlocks audio */
     if(window.matchMedia('(pointer:coarse)').matches){
       intro.classList.add('intro-mobile');
       const label = intro.querySelector('.intro-press span');
@@ -785,7 +765,7 @@
           toggle.setAttribute('aria-pressed', String(!muted));
         };
         if(video){
-          // must happen synchronously inside the tap, or mobile browsers keep the video muted
+          // has to run inside the tap, or mobile keeps the video muted
           video.muted = false;
           video.volume = 1;
           try{ video.currentTime = 0; }catch(e){}
@@ -924,15 +904,6 @@
       <p class="section-count lower" id="frameCount">visual log</p>
     </div>
     <div class="disc-gallery" id="discGallery" tabindex="0" role="group" aria-roledescription="carousel" aria-label="Photo archive disc gallery" aria-keyshortcuts="ArrowLeft ArrowRight Home End Enter Space" aria-describedby="discHelp">
-      <aside class="disc-info" id="discInfo">
-        <h2 class="disc-title" id="discTitle"></h2>
-        <dl class="disc-meta">
-          <div class="disc-row"><dt>Note</dt><dd id="discNote"></dd></div>
-          <div class="disc-row"><dt>Date</dt><dd id="discDate"></dd></div>
-          <div class="disc-row"><dt>Frames</dt><dd id="discFrames"></dd></div>
-        </dl>
-        <p class="disc-counter" id="discCount"></p>
-      </aside>
       <div class="disc-stage" id="discStage">
         <canvas id="discCanvas" aria-hidden="true"></canvas>
       </div>
@@ -1115,8 +1086,7 @@
   let morphBusy = false;
   let lbLoadToken = 0;
 
-  /* spinning CD loader: shown while the lightbox media is loading */
-  /* the CD only appears if loading takes longer than LB_LOADER_DELAY, so quick/cached swaps never flash it */
+  /* the spinner only shows if loading is slow, so quick swaps don't flash it */
   const LB_LOADER_DELAY = 350;
   let lbLoaderTimer = null;
   function lbLoaderStart(){
@@ -1128,7 +1098,7 @@
     lbFrame.classList.remove('lb-loading');
   }
 
-  /* warm the browser cache for the current set so Next/Prev are instant */
+  /* preload so next/prev are instant */
   const lbWarm = new Map();
   function lbPreload(item){
     if(!item) return;
@@ -1230,21 +1200,13 @@
 
   const stage   = document.getElementById('discStage');
   const canvas  = document.getElementById('discCanvas');
-  const info    = document.getElementById('discInfo');
-  const elTitle = document.getElementById('discTitle');
-  const elNote  = document.getElementById('discNote');
-  const elDate  = document.getElementById('discDate');
-  const elFrames= document.getElementById('discFrames');
-  const elCount = document.getElementById('discCount');
   const elLive  = document.getElementById('discLive');
-  const rows    = Array.from(info.querySelectorAll('.disc-row'));
 
   const N = photoItems.length;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
   const pad2  = n=>String(n).padStart(2,'0');
 
-  /* ---- values read from the reference gallery's own config ---- */
   const CFG = {
     galleryScale:1.08, hGap:2.3, depthGap:1, activeDiscY:.06,
     galleryRotX:-30, galleryRotY:-30, inactiveScale:.8,
@@ -1253,13 +1215,12 @@
     hoverTiltStrength:.42, hoverLift:.16, hoverScale:.045, dragSensitivity:.95, dragStartDistance:5,
     snapFreq:9.5, snapDamping:12,
     spinSpeed:1.1, spinEase:2.2,
-    openSpin:16, openSpinEase:5, openDelay:900,   // click: fast spin-up (rad/s), ramp rate, ms before the photo card opens   // rad/s while hovered (slow DVD-style), spin-up / spin-down rate
+    openSpin:16, openSpinEase:5, openDelay:900,
 
     flowLean:.055, flowLeanMax:.3, flowBank:.32, flowDip:.014, flowDipMax:.09,
     renderRadius:5, artResolution:1024
   };
 
-  /* cubic-bezier easing (the reference's "discGlide" is 0.32, 0.72, 0, 1) */
   function bez(x1,y1,x2,y2){
     const cx=3*x1, bx=3*(x2-x1)-cx, ax=1-cx-bx;
     const cy=3*y1, by=3*(y2-y1)-cy, ay=1-cy-by;
@@ -1277,54 +1238,15 @@
   }
   const glide = bez(.32,.72,0,1);
 
-  /* ---------------- info panel ---------------- */
-  function frameSummary(item){
-    const v = item.media.filter(m=>isVideoSrc(m.src)).length;
-    const p = item.media.length - v;
-    const parts = [];
-    if(p) parts.push(p + (p===1?' photo':' photos'));
-    if(v) parts.push(v + (v===1?' clip':' clips'));
-    return parts.join(' · ');
-  }
-  let shown = -1;
-  function applyInfo(i){
+  function showInfo(i){
     const it = photoItems[i];
-    shown = i;
-    elTitle.textContent = it.title;
-    elNote.textContent = it.note || '—';
-    elDate.textContent = it.date;
-    elFrames.textContent = frameSummary(it);
-    elCount.textContent = pad2(i+1) + ' / ' + pad2(N);
     elLive.textContent = it.title + ', ' + (i+1) + ' of ' + N;
     root.dataset.activeIndex = i;
   }
-  const swapEls = [elTitle].concat(rows);
-  let swapping = false, wanted = 0;
-  function showInfo(i){
-    wanted = i;
-    if(shown === -1 || reduce || !swapEls[0].animate){ applyInfo(i); return; }
-    if(swapping) return;
-    swapping = true;
-    const outs = swapEls.map((el,k)=>el.animate(
-      [{opacity:1,transform:'none'},{opacity:0,transform:'translateY(-8px)'}],
-      {duration:170, delay:k*20, easing:'ease-in', fill:'forwards'}));
-    Promise.all(outs.map(a=>a.finished.catch(()=>{}))).then(()=>{
-      applyInfo(wanted);
-      swapEls.forEach((el,k)=>{
-        el.getAnimations().forEach(a=>a.cancel());
-        el.animate(
-          [{opacity:0,transform:'translateY(12px)'},{opacity:1,transform:'none'}],
-          {duration:520, delay:k*55, easing:'cubic-bezier(.32,.72,0,1)', fill:'backwards'});
-      });
-      swapping = false;
-      if(wanted !== shown) showInfo(wanted);
-    });
-  }
 
-  /* ---------------- state ---------------- */
-  let L = 0, V = 0, target = 0, active = 0;   // L = float position (in discs), V = velocity (discs/s)
+  let L = 0, V = 0, target = 0, active = 0;
   let dragging = false, dirty = true, inView = true;
-  let openFx = null;   // {i,t0,dur} while the clicked disc winds up before the card opens
+  let openFx = null;
   let W = 1, H = 1, aspect = 1, narrow = false;
   const isCoarse = window.matchMedia('(pointer:coarse)').matches;
   if(isCoarse) CFG.renderRadius = 3;
@@ -1353,7 +1275,6 @@
     }, CFG.openDelay);
   }
 
-  /* ---------------- fallback (no WebGL / three.js blocked) ---------------- */
   function buildFallback(){
     root.classList.add('is-fallback');
     const list = document.createElement('div'); list.className = 'disc-fallback';
@@ -1372,13 +1293,12 @@
     canvas.style.display = 'none';
   }
 
-  if(!window.THREE){ buildFallback(); applyInfo(0); return; }
+  if(!window.THREE){ buildFallback(); showInfo(0); return; }
 
-  /* ---------------- three.js scene ---------------- */
   let renderer;
   try{
     renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true, powerPreference:'high-performance'});
-  }catch(err){ buildFallback(); applyInfo(0); return; }
+  }catch(err){ buildFallback(); showInfo(0); return; }
   renderer.setClearColor(0x000000, 0);
   renderer.outputEncoding = THREE.sRGBEncoding;
 
@@ -1392,7 +1312,6 @@
   group.rotation.y = THREE.MathUtils.degToRad(CFG.galleryRotY);
   scene.add(group);
 
-  /* studio lighting: soft key, cool rim, generated reflection map */
   scene.add(new THREE.AmbientLight(0xffffff,.35));
   const key = new THREE.DirectionalLight(0xFFF9E8,1.1); key.position.set(3.5,5,6); scene.add(key);
   const fill = new THREE.DirectionalLight(0xffffff,.3); fill.position.set(-4,1,4); scene.add(fill);
@@ -1404,16 +1323,15 @@
     const g = x.createLinearGradient(0,0,0,512);
     g.addColorStop(0,'#2a3040'); g.addColorStop(.5,'#11141c'); g.addColorStop(1,'#07080c');
     x.fillStyle = g; x.fillRect(0,0,1024,512);
-    // soft-boxes: bright rectangles with a glow, like a product-photo studio
     const box = (px,py,w,h,col,glow)=>{
       x.save(); x.shadowColor = col; x.shadowBlur = glow; x.fillStyle = col;
       x.fillRect(px,py,w,h); x.fillRect(px,py,w,h); x.restore();
     };
-    box(140,70,70,300,'#ffffff',60);      // tall key strip
-    box(470,40,260,34,'#fff1d6',50);      // warm overhead bar
-    box(840,110,46,260,'#9cc8ff',55);     // cool rim strip
-    box(330,300,150,18,'#ffffff',35);     // low kicker
-    box(640,330,90,12,'#c9a3ff',30);      // violet accent
+    box(140,70,70,300,'#ffffff',60);
+    box(470,40,260,34,'#fff1d6',50);
+    box(840,110,46,260,'#9cc8ff',55);
+    box(330,300,150,18,'#ffffff',35);
+    box(640,330,90,12,'#c9a3ff',30);
     const t = new THREE.CanvasTexture(c);
     t.mapping = THREE.EquirectangularReflectionMapping;
     t.encoding = THREE.sRGBEncoding;
@@ -1423,7 +1341,6 @@
     t.dispose(); pm.dispose();
   })();
 
-  /* shared disc geometry: face ring, rim, hub rings (ported from the reference) */
   const T = CFG.discThickness;
   const faceOuter = 1 - CFG.edgeBleed;
   function fixUV(geo){
@@ -1473,11 +1390,10 @@
   const frostMat  = new THREE.MeshPhysicalMaterial({color:0xcfe2f7, metalness:0, roughness:.08, transparent:true, opacity:.38, clearcoat:1, clearcoatRoughness:.04, envMapIntensity:1.8, side:THREE.DoubleSide});
   const matrixMat = new THREE.MeshStandardMaterial({color:0xdfe6ef, metalness:.6, roughness:.18, envMapIntensity:1.4, side:THREE.DoubleSide});
   const hubMat    = new THREE.MeshPhysicalMaterial({color:0xe3ebf6, metalness:.2, roughness:.1, transparent:true, opacity:.55, clearcoat:1, clearcoatRoughness:.04, envMapIntensity:1.8, side:THREE.DoubleSide});
-  const stackGeo  = ringLathe(hubR, hubR+.035, T*1.9, .55, 160);   // raised stacking ring
+  const stackGeo  = ringLathe(hubR, hubR+.035, T*1.9, .55, 160);
   const stackMat  = new THREE.MeshPhysicalMaterial({color:0xf2f6fc, metalness:.1, roughness:.06, transparent:true, opacity:.5, clearcoat:1, clearcoatRoughness:.03, envMapIntensity:2, side:THREE.DoubleSide});
   const pickMat   = new THREE.MeshBasicMaterial({visible:false, side:THREE.DoubleSide, depthWrite:false});
 
-  /* etched barcode-like ring on the clear hub, as on a real disc */
   const tickGeo = new THREE.RingGeometry(rFrost, rMatrix, 128, 1);
   const tickMat = (function(){
     const c = document.createElement('canvas'); c.width = c.height = 512;
@@ -1493,7 +1409,6 @@
     return new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity:.8, depthWrite:false, side:THREE.DoubleSide});
   })();
 
-  /* ---------------- photo -> disc texture ---------------- */
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
   const ART = window.matchMedia('(max-width:760px)').matches ? 768 : CFG.artResolution;
 
@@ -1541,7 +1456,7 @@
     img.decoding = 'async';
     img.onload = ()=>{
       try{
-        // draw to a scratch canvas first: a cross-origin / file:// image taints it, and a tainted canvas can't be un-tainted
+        // draw to a scratch canvas first, so a blocked image can't break the main one
         const s = document.createElement('canvas'); s.width = s.height = ART;
         const sx = s.getContext('2d');
         const side = Math.min(img.naturalWidth, img.naturalHeight);
@@ -1589,7 +1504,6 @@
     discs.forEach((d,i)=>{ if(Math.abs(i-active) <= CFG.renderRadius) loadArt(d); });
   }
 
-  /* ---------------- printed details: foil grain + small rim text ---------------- */
   const FOIL = (function(){
     const S = 512, h = S/2;
     const small = document.createElement('canvas'); small.width = small.height = h;
@@ -1603,8 +1517,7 @@
     const bump = document.createElement('canvas'); bump.width = bump.height = S;
     const bx = bump.getContext('2d');
     bx.imageSmoothingEnabled = true;
-    bx.drawImage(small,0,0,S,S);                       // soft, stippled grain
-    // same grain as a light/dark speckle layer that gets printed over the disc face
+    bx.drawImage(small,0,0,S,S);
     const stip = document.createElement('canvas'); stip.width = stip.height = S;
     const tx = stip.getContext('2d');
     const src = bx.getImageData(0,0,S,S), out = tx.createImageData(S,S);
@@ -1624,8 +1537,7 @@
   let INK = 'rgba(255,255,255,.6)', SHADE = 'rgba(0,0,0,0)';
   const ovUp = str => String(str).toUpperCase();
 
-  /* draws a string along a circle. mode: 'bottom' (reads left→right, tops toward centre),
-     'top' (tops outward) or 'full' (whole ring, spacing stretched to close exactly) */
+  /* draws text along a circle */
   function arcText(ctx,str,cx,cy,r,mode,sp){
     const chars = Array.from(str);
     const ws = chars.map(ch=>ctx.measureText(ch).width + sp);
@@ -1644,7 +1556,7 @@
       ctx.restore();
       th += mode==='bottom' ? -a : a;
     });
-    return total / r;   // angle used (rad)
+    return total / r;
   }
   function arcWidth(ctx,str,sp){
     return Array.from(str).reduce((a,ch)=>a+ctx.measureText(ch).width+sp,0);
@@ -1663,7 +1575,7 @@
     const ctx = d.ov.ctx, S = d.ov.canvas.width, R = S/2, k = S/1024;
     ctx.clearRect(0,0,S,S);
 
-    // pick ink from the artwork under the rim: light print on dark art, dark print on light art
+    // pick light or dark text depending on the artwork
     let lum = .3;
     try{
       let sum = 0, cnt = 0;
@@ -1684,7 +1596,6 @@
     const font = (w,px)=> w + ' ' + (px*k).toFixed(1) + 'px Inter,Arial,sans-serif';
     const sp = 5*k, rr = R*.93;
 
-    // credits along the rim, like a real disc
     ctx.font = font(500,12);
     arcText(ctx, ovUp('© 2026 Kevin Daison  ·  all rights reserved'), R,R, rr, 'top', sp);
 
@@ -1700,7 +1611,6 @@
     d.ov.tex.needsUpdate = true;
   }
 
-  /* ---------------- build discs ---------------- */
   const discs = photoItems.map((item,i)=>{
     const g = new THREE.Group();
     const spin = new THREE.Group(); g.add(spin);
@@ -1734,11 +1644,10 @@
     ]).catch(()=>{}).then(()=>{ discs.forEach(paintOverlay); dirty = true; });
   }
 
-  /* ---------------- sizing ---------------- */
   function resize(){
     const isNarrow = window.innerWidth <= 760;
     const gr = root.getBoundingClientRect();
-    const up = isNarrow ? 0 : Math.max(0, Math.round(gr.top + window.scrollY));   // canvas reaches up to the top of the page
+    const up = isNarrow ? 0 : Math.max(0, Math.round(gr.top + window.scrollY));
     root.style.setProperty('--disc-up', up + 'px');
     const r = stage.getBoundingClientRect();
     W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
@@ -1747,15 +1656,15 @@
     renderer.setSize(W,H,false);
     aspect = W/H;
     const f0 = Math.tan(CFG.cameraFOV*Math.PI/360);
-    camera.fov = 2*Math.atan(f0*H/gh)*180/Math.PI;      // keeps discs the same pixel size despite the taller canvas
+    camera.fov = 2*Math.atan(f0*H/gh)*180/Math.PI;
     camera.aspect = aspect; camera.updateProjectionMatrix();
     narrow = isNarrow;
     const aspG = W/gh;
     const visW = 2*CFG.cameraDistance*f0*aspG;
     const fit = narrow ? Math.min(1, .8*visW/(2*CFG.galleryScale)) : 1;
     group.scale.setScalar(CFG.galleryScale*fit);
-    group.position.x = narrow ? 0 : Math.max(0, 1.75-aspG)*.45;   // nudge right on tighter desktops so the text panel stays clear
-    group.position.y = -(up/2)*(2*CFG.cameraDistance*f0/gh);        // re-centre the discs on the gallery area
+    group.position.x = narrow ? 0 : Math.max(0, 1.75-aspG)*.45;
+    group.position.y = -(up/2)*(2*CFG.cameraDistance*f0/gh);
     dirty = true;
   }
   if(window.ResizeObserver) new ResizeObserver(resize).observe(stage);
@@ -1768,7 +1677,6 @@
     new IntersectionObserver(es=>{ inView = es[0].isIntersecting; if(inView) dirty = true; }, {threshold:0}).observe(root);
   }
 
-  /* ---------------- projection helpers ---------------- */
   const _v = new THREE.Vector3();
   function refreshMatrices(){ scene.updateMatrixWorld(true); camera.updateMatrixWorld(); }
   function projectDisc(d){
@@ -1783,7 +1691,6 @@
     return {cx:(minx+maxx)/2, cy:(miny+maxy)/2, rx:(maxx-minx)/2, ry:(maxy-miny)/2};
   }
 
-  /* ---------------- picking ---------------- */
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   function pickAt(cx,cy){
     const r = canvas.getBoundingClientRect();
@@ -1797,7 +1704,6 @@
   const ptr = {x:0,y:0,inside:false};
   let hoverIdx = -1;
 
-  /* ---------------- physics + layout ---------------- */
   function physics(dt){
     if(dragging) return;
     const diff = target - L;
@@ -1826,7 +1732,6 @@
     const v = Math.max(T*3, .12, CFG.depthGap);
     let animating = dragging || Math.abs(V) > 1e-3 || Math.abs(target-L) > 1e-3;
 
-    // hovered disc pointer offset (for the tilt)
     let hoverOff = null;
     if(hoverIdx >= 0 && ptr.inside && !dragging){
       refreshMatrices();
@@ -1838,7 +1743,7 @@
 
     discs.forEach((d,i)=>{
       const m = i - L, h = Math.abs(m);
-      const act = clamp(1-h,0,1);                 // 1 on the centred disc, fades to 0 by the next one
+      const act = clamp(1-h,0,1);
       const ang = m*.35;
 
       let e = 1;
@@ -1863,7 +1768,7 @@
       const wantHover = (i === hoverIdx && !isCoarse && !dragging) ? 1 : 0;
       const dh = wantHover - d.hover;
       if(Math.abs(dh) > 1e-3){ d.hover += dh*Math.min(1,dt*10); animating = true; } else d.hover = wantHover;
-      const fx = (openFx && openFx.i === i) ? openFx : null;   // clicked disc: hold still, spin fast
+      const fx = (openFx && openFx.i === i) ? openFx : null;
       const fp = fx ? clamp((now-fx.t0)/fx.dur,0,1) : 0;
       const gx = (i === hoverIdx && hoverOff && !fx) ? hoverOff.x : 0;
       const gy = (i === hoverIdx && hoverOff && !fx) ? hoverOff.y : 0;
@@ -1874,10 +1779,8 @@
       ry += d.tx*CFG.hoverTiltStrength*Math.max(d.hover,.0001);
       z += CFG.hoverLift*d.hover;
 
-      // intro: discs slide in from the right and grow
       x += (1-e)*1.4; ry -= (1-e)*.6; z -= (1-e)*.6;
 
-      // CD spins about its own axis while hovered; eases up to speed and coasts to a stop
       const wantSpin = fx ? CFG.openSpin : ((wantHover && !reduce) ? CFG.spinSpeed : 0);
       d.spinV += (wantSpin - d.spinV)*Math.min(1, dt*(fx ? CFG.openSpinEase : CFG.spinEase));
       d.openK += ((fx ? fp*fp : 0) - d.openK)*Math.min(1, dt*(fx ? 12 : 4));
@@ -1896,7 +1799,6 @@
     return animating;
   }
 
-  /* ---------------- input: wheel ---------------- */
   let wAcc = 0, wLast = 0, wStepAt = -1e9, wPrevAbs = 0, wStart = 0;
   stage.addEventListener('wheel', e=>{
     if(e.ctrlKey || e.metaKey) return;
@@ -1905,7 +1807,7 @@
     if(e.deltaMode === 1) d *= 16; else if(e.deltaMode === 2) d *= H;
     if(!d) return;
     const dir = d > 0 ? 1 : -1;
-    // let the page scroll normally once the gallery isn't at the top, or at either end of the row
+    // let the page scroll normally past the gallery
     if(!horiz){
       if(window.scrollY > 40) return;
       if((dir > 0 && active >= N-1) || (dir < 0 && active <= 0)){ wAcc = 0; return; }
@@ -1916,7 +1818,7 @@
     wLast = now;
     const abs = Math.abs(d);
     wAcc += d;
-    const notch = abs >= 50;                    // a mouse-wheel click vs. a trackpad stream
+    const notch = abs >= 50;
     const need = notch ? 1 : 60, minGap = notch ? 90 : 190;
     const rising = abs > wPrevAbs*1.2 + 2, decaying = abs <= wPrevAbs;
     wPrevAbs = abs;
@@ -1927,7 +1829,6 @@
     }
   }, {passive:false});
 
-  /* ---------------- input: drag / click ---------------- */
   let drag = null;
   const pxPerDisc = ()=> narrow ? W*.42 : clamp(W*.22, 160, 320);
   stage.addEventListener('pointerdown', e=>{
@@ -1947,7 +1848,7 @@
       }
       if(drag.moved){
         let Lt = drag.L0 - dx*CFG.dragSensitivity/pxPerDisc();
-        if(Lt < 0) Lt *= .35; else if(Lt > N-1) Lt = (N-1) + (Lt-(N-1))*.35;   // rubber-band at the ends
+        if(Lt < 0) Lt *= .35; else if(Lt > N-1) Lt = (N-1) + (Lt-(N-1))*.35;
         L = Lt; target = clamp(Math.round(Lt),0,N-1);
         const now = performance.now();
         drag.s.push({L:Lt,t:now});
@@ -1988,7 +1889,6 @@
   stage.addEventListener('pointercancel', e=>endDrag(e,true));
   stage.addEventListener('pointerleave', ()=>{ ptr.inside = false; if(hoverIdx !== -1){ hoverIdx = -1; dirty = true; } });
 
-  /* ---------------- input: keyboard ---------------- */
   document.addEventListener('keydown', e=>{
     const lbEl = document.getElementById('lightbox');
     if(lbEl && lbEl.classList.contains('open')) return;
@@ -2005,7 +1905,6 @@
     else if(focused && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); openActive(); }
   });
 
-  /* ---------------- main loop ---------------- */
   let last = performance.now(), lastPick = 0;
   function frame(now){
     requestAnimationFrame(frame);
@@ -2030,7 +1929,7 @@
     if(dirty){ renderer.render(scene,camera); dirty = false; }
   }
 
-  applyInfo(0);
+  showInfo(0);
   ensureArt();
   requestAnimationFrame(frame);
 })();
@@ -2198,8 +2097,7 @@
     });
   }
 
-  /* after the intro: rewind, wait until the first frames are buffered, then unmute and
-     play at full volume from 0:00 - no timed unmute/fade, so the start of the song isn't clipped */
+  /* after the intro: rewind, wait for the video to buffer, then unmute and play from the start */
   document.addEventListener('introended', () => {
     if(!video.muted) return;
     let started = false;
