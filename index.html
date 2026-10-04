@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
+    --bar-zoom:1.45;
     --bg:radial-gradient(circle at 30% 15%, #6e4c92 0%, #4a2f63 45%, #1c1520 100%);
     --bg-solid:#241d2b;
     --ink:#ede7f2;
@@ -181,6 +182,7 @@
     width:100vw;
     height:100vh;
     object-fit:cover;
+    transform:scale(var(--bar-zoom,1.45));
     z-index:-2;
     pointer-events:none;
   }
