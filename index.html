@@ -947,7 +947,7 @@
             <circle cx="50" cy="50" r="6" fill="none" stroke="#2a2a33" stroke-width="1.2"/>
           </svg>
         </div>
-        <span class="lb-empty lower">add this photo in the photos folder</span>
+        <span class="lb-empty lower">photo unavailable</span>
       </div>
     </div>
     <div class="lb-cap lower" id="lbCap"></div>
@@ -1139,8 +1139,8 @@
       const emptyLabel = lbFrame.querySelector('.lb-empty');
       if(emptyLabel){
         emptyLabel.textContent = el.tagName === 'VIDEO'
-          ? 'add this video in the photos folder'
-          : 'add this photo in the photos folder';
+          ? 'video unavailable'
+          : 'photo unavailable';
       }
 
       const myToken = ++lbLoadToken;
@@ -1440,7 +1440,7 @@
     console.warn('[disc archive] could not load disc face:', src);
     if(location.protocol === 'file:' && !root.querySelector('.disc-warn')){
       const w = document.createElement('p'); w.className = 'disc-warn';
-      w.textContent = 'Photos can\u2019t be read into WebGL from a file:// page. Serve the folder (VS Code Live Server, or "npx serve") and reload.';
+      w.textContent = 'Photos couldn\u2019t be loaded.';
       root.appendChild(w);
     }
   }
