@@ -1216,7 +1216,7 @@
     openSpin:16, openSpinEase:5, openDelay:900,
 
     flowLean:.055, flowLeanMax:.3, flowBank:.32, flowDip:.014, flowDipMax:.09,
-    renderRadius:5, artResolution:1024
+    renderRadius:5, artResolution:2048, artResolutionMobile:1536
   };
 
   function bez(x1,y1,x2,y2){
@@ -1408,7 +1408,8 @@
   })();
 
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
-  const ART = window.matchMedia('(max-width:760px)').matches ? 768 : CFG.artResolution;
+  const ART = Math.min(renderer.capabilities.maxTextureSize || 2048,
+    window.matchMedia('(max-width:760px)').matches ? CFG.artResolutionMobile : CFG.artResolution);
 
   function toneColors(tone){
     const m = String(tone||'').match(/#[0-9a-f]{3,8}/gi);
@@ -1650,7 +1651,7 @@
     const r = stage.getBoundingClientRect();
     W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
     const gh = Math.max(1, H - up);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, isCoarse ? 1.5 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, isCoarse ? 2.5 : 2));
     renderer.setSize(W,H,false);
     aspect = W/H;
     const f0 = Math.tan(CFG.cameraFOV*Math.PI/360);
