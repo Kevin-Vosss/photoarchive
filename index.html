@@ -954,6 +954,10 @@
   .lenis.lenis-stopped{overflow:hidden}
   .lenis [data-lenis-prevent]{overscroll-behavior:contain}
   .scroll-progress{position:fixed;left:0;top:0;height:2px;width:100%;z-index:30;pointer-events:none;background:var(--accent);transform:scaleX(0);transform-origin:0 50%}
+
+  /* ---- blob cursor ---- */
+  .has-custom-cursor,.has-custom-cursor *{cursor:none!important}
+  .blob-cursor-container{z-index:200000}
 </style>
 </head>
 <body>
@@ -3565,6 +3569,170 @@
   });
 
   window.addEventListener('load', ()=>ScrollTrigger.refresh());
+})();
+</script>
+<script>
+(function blobCursor(){
+  if(!window.gsap || !window.matchMedia('(pointer:fine)').matches) return;
+  document.documentElement.classList.add('has-custom-cursor');
+  const gsap = window.gsap;
+  const targetSelector = 'a,button,.project-card,[role="button"],.lb-close,.lb-nav span';
+  (function(){
+
+      const blobColor = '#ffffff', blobColorOnTarget = '#ffffff';
+      const hoverScale = 1.9, reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const blobSpecs = [
+        {size:16, duration:0.08, ease:'power3.out'},
+        {size:30, duration:0.24, ease:'power3.out'},
+        {size:22, duration:0.4,  ease:'power3.out'}
+      ];
+
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS,'svg');
+      svg.setAttribute('width','0');
+      svg.setAttribute('height','0');
+      svg.style.position = 'absolute';
+      svg.innerHTML =
+        '<filter id="blobGoo"><feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>' +
+        '<feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 14 -5.5" result="goo"/>' +
+        '<feComposite in="SourceGraphic" in2="goo" operator="atop"/></filter>';
+      document.body.appendChild(svg);
+
+      const container = document.createElement('div');
+      container.className = 'blob-cursor-container';
+      document.body.appendChild(container);
+      const goo = document.createElement('div');
+      goo.className = 'blob-cursor-goo';
+      container.appendChild(goo);
+
+      const blobs = blobSpecs.map(({size})=>{
+        const b = document.createElement('div');
+        b.className = 'blob-cursor-blob';
+        b.style.width = size+'px';
+        b.style.height = size+'px';
+        b.style.marginLeft = (-size/2)+'px';
+        b.style.marginTop = (-size/2)+'px';
+        goo.appendChild(b);
+        return b;
+      });
+
+      const getContainingBlock = element => {
+        let node = element && element.parentElement;
+        while(node && node !== document.documentElement){
+          const style = getComputedStyle(node);
+          if(
+            style.transform !== 'none' ||
+            style.perspective !== 'none' ||
+            style.filter !== 'none' ||
+            style.willChange.includes('transform') ||
+            style.willChange.includes('perspective') ||
+            style.willChange.includes('filter') ||
+            /paint|layout|strict|content/.test(style.contain)
+          ) return node;
+          node = node.parentElement;
+        }
+        return null;
+      };
+      const getContainingBlockOffset = block=>{
+        if(!block) return {x:0,y:0};
+        const rect = block.getBoundingClientRect();
+        return {x:rect.left + block.clientLeft, y:rect.top + block.clientTop};
+      };
+
+      let containingBlock = getContainingBlock(container);
+      const applyOffset = ()=>{
+        const {x,y} = getContainingBlockOffset(containingBlock);
+        gsap.set(container, {x:-x, y:-y});
+      };
+      applyOffset();
+      window.addEventListener('resize', ()=>{ containingBlock = getContainingBlock(container); applyOffset(); });
+
+      const startX = window.innerWidth/2, startY = window.innerHeight/2;
+      gsap.set(blobs, {x:startX, y:startY});
+
+      const movers = blobs.map((b,i)=>({
+        x: gsap.quickTo(b, 'x', {duration: reduceMotion ? 0 : blobSpecs[i].duration, ease: blobSpecs[i].ease}),
+        y: gsap.quickTo(b, 'y', {duration: reduceMotion ? 0 : blobSpecs[i].duration, ease: blobSpecs[i].ease})
+      }));
+
+      let lastMoveX = startX, lastMoveY = startY;
+      const moveCursor = (x,y)=>{
+        lastMoveX = x; lastMoveY = y;
+        movers.forEach(m=>{ m.x(x); m.y(y); });
+      };
+      window.addEventListener('mousemove', e=>moveCursor(e.clientX, e.clientY));
+
+      let activeTarget = null;
+      let currentLeaveHandler = null;
+
+      const cleanupTarget = target=>{
+        if(currentLeaveHandler) target.removeEventListener('mouseleave', currentLeaveHandler);
+        currentLeaveHandler = null;
+      };
+
+      const setHoverVisual = (on, instant)=>{
+        gsap.to(blobs, {
+          scale: on ? hoverScale : 1,
+          backgroundColor: on ? blobColorOnTarget : blobColor,
+          duration: instant ? 0 : 0.2, ease:'power2.out', overwrite:'auto'
+        });
+      };
+
+      window.__refreshTargetCursor = (instant)=>{
+        if(!activeTarget || !activeTarget.isConnected) return;
+        setHoverVisual(true, instant);
+      };
+
+      const enterTarget = target=>{
+        if(!target || activeTarget === target) return;
+        if(activeTarget) cleanupTarget(activeTarget);
+
+        activeTarget = target;
+        setHoverVisual(true, false);
+
+        const leaveHandler = ()=>{
+          activeTarget = null;
+          setHoverVisual(false, false);
+          cleanupTarget(target);
+        };
+
+        currentLeaveHandler = leaveHandler;
+        target.addEventListener('mouseleave', leaveHandler);
+      };
+
+      const enterHandler = e=>{
+        const target = e.target.closest && e.target.closest(targetSelector);
+        enterTarget(target);
+      };
+
+      window.__enterTargetCursor = enterTarget;
+      window.addEventListener('mouseover', enterHandler, {passive:true});
+
+      window.addEventListener('scroll', ()=>{
+        if(!activeTarget) return;
+        const elementUnderMouse = document.elementFromPoint(lastMoveX, lastMoveY);
+        const isStillOverTarget = elementUnderMouse &&
+          (elementUnderMouse === activeTarget || elementUnderMouse.closest(targetSelector) === activeTarget);
+        if(!isStillOverTarget && currentLeaveHandler) currentLeaveHandler();
+      }, {passive:true});
+
+      gsap.ticker.add(()=>{
+        const el = document.elementFromPoint(lastMoveX, lastMoveY);
+        const target = el && el.closest && el.closest(targetSelector);
+        if(target === activeTarget) return;
+        if(target) enterTarget(target);
+        else if(currentLeaveHandler) currentLeaveHandler();
+      });
+
+      window.addEventListener('mousedown', ()=>{
+        gsap.to(blobs, {scale: (activeTarget ? hoverScale : 1) * 0.7, duration:0.2});
+      });
+      window.addEventListener('mouseup', ()=>{
+        gsap.to(blobs, {scale: activeTarget ? hoverScale : 1, duration:0.3});
+      });
+
+  })();
 })();
 </script>
 </body>
