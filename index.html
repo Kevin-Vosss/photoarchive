@@ -908,7 +908,6 @@
     <div class="section-topline">
 
       <p class="section-label lower">02 / tangent</p>
-      <p class="section-count lower">interactive</p>
     </div>
     <div class="hobbies-heading">
       <h2 class="section-title lower">what i'm into</h2>
@@ -919,8 +918,6 @@
         <div id="graph3d"></div>
       </div>
       <aside class="hobby-branch" id="hobbyBranch" aria-live="polite">
-        <p class="branch-kicker">selected thread</p>
-        <p class="branch-placeholder">click a hobby to open a note</p>
         <div class="node-caption" id="nodeCaption">
           <div class="nc-name lower" id="ncName"></div>
           <div class="nc-desc lower" id="ncDesc"></div>
@@ -2128,7 +2125,7 @@
           ncDesc.textContent = node.desc;
           captionEl.classList.add('show');
           branchEl.classList.add('is-open');
-          branchPlaceholder.hidden = true;
+          if (branchPlaceholder) branchPlaceholder.hidden = true;
           const distance = 90;
           const ratio = 1 + distance / Math.hypot(node.x||1, node.y||1, node.z||1);
           Graph.cameraPosition(
@@ -2139,7 +2136,7 @@
         } else {
           captionEl.classList.remove('show');
           branchEl.classList.remove('is-open');
-          branchPlaceholder.hidden = false;
+          if (branchPlaceholder) branchPlaceholder.hidden = false;
         }
       });
     if(window.matchMedia('(pointer:coarse)').matches){
