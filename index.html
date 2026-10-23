@@ -1065,103 +1065,9 @@
 
   function isVideoSrc(src){ return /\.(mp4|webm|mov|m4v|ogv)(\?.*)?$/i.test(src); }
 
-  /* videos only start loading when a disc is tapped. A small pool of hidden, muted <video> elements keeps the
-     other clips of the open disc buffered (one at a time, after the one on screen is playable), so next/prev start instantly */
-  const lbPool = new Map();            // src -> {el, ready, inflight, adopted}
-  let lbWarmQueue = [], lbWarmBusy = false;
-  const LB_HIDE = 'position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
-  function lbKillVideo(v){
-    try{ v.pause(); v.removeAttribute('src'); v.load(); }catch(e){}
-    if(v.parentNode) v.parentNode.removeChild(v);
-  }
-  function lbPoolClear(){
-    lbPool.forEach(e=>lbKillVideo(e.el));
-    lbPool.clear(); lbWarmQueue = []; lbWarmBusy = false;
-  }
-  function lbPump(){
-    if(lbWarmBusy) return;
-    while(lbWarmQueue.length){
-      const src = lbWarmQueue.shift();
-      if(lbPool.has(src)) continue;
-      lbWarmStart(src);
-      return;
-    }
-  }
-  function lbWarmStart(src){
-    const v = document.createElement('video');
-    v.muted = true; v.defaultMuted = true; v.setAttribute('muted','');
-    v.loop = true; v.playsInline = true; v.setAttribute('playsinline','');
-    v.autoplay = true; v.preload = 'auto';
-    v.dataset.poolSrc = src;
-    v.style.cssText = LB_HIDE;
-    const e = {el:v, ready:false, inflight:true, adopted:false};
-    lbPool.set(src, e); lbWarmBusy = true;
-    const done = ()=>{ if(!e.inflight) return; e.inflight = false; lbWarmBusy = false; lbPump(); };
-    // once it can play, park it paused at the start (it keeps buffering) and move on to the next clip
-    v.addEventListener('canplay', ()=>{
-      e.ready = true;
-      if(!e.adopted){ try{ v.pause(); if(v.currentTime > 0) v.currentTime = 0; }catch(_){} }
-    }, {once:true});
-    v.addEventListener('canplaythrough', done, {once:true});
-    v.addEventListener('error', done, {once:true});
-    setTimeout(done, 6000);
-    v.src = src;
-    document.body.appendChild(v);
-    const pr = v.play(); if(pr && pr.catch) pr.catch(()=>{});
-  }
-  function lbPoolTake(src){
-    const e = lbPool.get(src);
-    if(!e) return null;
-    lbPool.delete(src);
-    e.adopted = true;
-    if(e.inflight){ e.inflight = false; lbWarmBusy = false; lbPump(); }
-    const v = e.el;
-    if(v.parentNode) v.parentNode.removeChild(v);
-    v.style.cssText = '';
-    try{ if(v.currentTime > 0) v.currentTime = 0; }catch(_){}
-    return v;
-  }
-  /* a clip you just left goes back into the pool (still buffered) instead of being thrown away */
-  function lbPoolStash(v){
-    const src = v.dataset && v.dataset.poolSrc;
-    if(!src || lbPool.has(src)){ lbKillVideo(v); return; }
-    try{ v.pause(); }catch(e){}
-    v.style.cssText = LB_HIDE;
-    document.body.appendChild(v);
-    lbPool.set(src, {el:v, ready:true, inflight:false, adopted:false});
-  }
-  function lbWarmVideoStart(item){
-    const m = item && item.media && item.media[0];
-    if(!m || !isVideoSrc(m.src)) return;
-    lbWarmQueue.unshift(m.src);
-    lbPump();
-  }
-  function lbQueueNeighbors(){
-    const item = photoItems[lbIndex];
-    if(!item) return;
-    const n = item.media.length;
-    for(let k=1;k<n;k++){
-      const m = item.media[(lbMediaIndex+k)%n];
-      if(m && isVideoSrc(m.src) && !lbPool.has(m.src) && lbWarmQueue.indexOf(m.src) < 0) lbWarmQueue.push(m.src);
-    }
-    lbPump();
-  }
-  function lbStopVideos(){
-    lbFrame.querySelectorAll('video').forEach(lbKillVideo);
-    lbPoolClear();
-  }
-
   function createMediaEl(item){
     if(isVideoSrc(item.src)){
-      const pv = lbPoolTake(item.src);
-      if(pv){
-        pv.dataset.poolSrc = item.src;
-        pv.setAttribute('aria-label', item.alt || '');
-        pv.muted = true;
-        return pv;
-      }
       const v = document.createElement('video');
-      v.dataset.poolSrc = item.src;
       v.src = item.src;
       v.muted = true;
       v.defaultMuted = true;
@@ -1264,9 +1170,7 @@
 
     const insertNew = ()=>{
 
-      lbFrame.querySelectorAll('img,video').forEach(node => {
-        if(node.tagName === 'VIDEO') lbPoolStash(node); else node.remove();
-      });
+      lbFrame.querySelectorAll('img,video').forEach(node => node.remove());
 
       lbFrame.classList.remove('lb-missing','has-image');
       lbLoaderStart();
@@ -1275,11 +1179,6 @@
       if(el.tagName === 'IMG') el.loading = 'eager';
       if(el.tagName === 'VIDEO'){ el.muted = true; }
       lbFrame.insertBefore(el, lbFrame.firstChild);
-      if(el.tagName === 'VIDEO'){
-        const pp = el.play(); if(pp && pp.catch) pp.catch(()=>{});
-        // once this clip is playable, start buffering the others in the background
-        if(el.readyState >= 3) lbQueueNeighbors(); else el.addEventListener('canplay', lbQueueNeighbors, {once:true});
-      }
       applyNativeRatio(lbFrame, el);
 
       const emptyLabel = lbFrame.querySelector('.lb-empty');
@@ -1307,7 +1206,7 @@
         lbFrame.style.height = '';
 
       };
-      if((el.complete && el.naturalWidth) || (el.tagName === 'VIDEO' && el.readyState >= 1)) reveal();
+      if(el.complete && el.naturalWidth) reveal();
       el.addEventListener('load', reveal);
       el.addEventListener('loadedmetadata', reveal);
       el.addEventListener('error', ()=>{
@@ -1332,7 +1231,7 @@
     lbMediaIndex = (lbMediaIndex + dir + item.media.length) % item.media.length;
     renderLB();
   }
-  function closeLB(){lbLoaderStop();lb.classList.remove('open');document.body.style.overflow='';lbStopVideos()}
+  function closeLB(){lbLoaderStop();lb.classList.remove('open');document.body.style.overflow=''}
   function lbBackdrop(event){if(event.target.id==='lightbox')closeLB()}
 
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeLB()});
@@ -1415,7 +1314,6 @@
     if(typeof openLB !== 'function' || openFx) return;
     const i = active;
     if(typeof lbPrewarmFirst === 'function') lbPrewarmFirst(photoItems[i]);
-    if(typeof lbWarmVideoStart === 'function') lbWarmVideoStart(photoItems[i]);
     if(reduce){ openLB(i); return; }
     if(isCoarse) setResScale(.62);
     openFx = {i, t0:performance.now(), dur:CFG.openDelay};
@@ -1603,14 +1501,9 @@
     if(d.art.started) return;
     d.art.started = true;
     const first = d.item.media[0];
-    let src = first && first.src;
+    const src = first && first.src;
     if(!src) return;
-    if(isVideoSrc(src)){
-      if(!isCoarse){ loadVideoFace(d,src); return; }
-      // phones: the clip is not downloaded until the disc is opened; use a poster image if the item has one
-      if(!first.poster) return;
-      src = first.poster;
-    }
+    if(isVideoSrc(src)){ loadVideoFace(d,src); return; }
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.decoding = 'async';
