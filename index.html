@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  /* mobile = touch screen or narrow viewport: only the CD gallery is shown, the DNA section is not loaded */
+  (function(){
+    var m = false;
+    try{ m = window.matchMedia('(max-width:760px), (pointer:coarse)').matches; }catch(e){ m = window.innerWidth <= 760; }
+    window.__noDna = m;
+    if(m) document.documentElement.classList.add('no-dna');
+  })();
+</script>
 <title>Kevin Daison — photo archive</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -590,6 +599,7 @@
     .disc-fb-title{font-size:15px}
   }
   
+  html.no-dna #hobbies{display:none!important}
   /* ---- hobbies / dna graph ---- */
   #hobbies{
     padding-top:11px;
@@ -928,6 +938,9 @@
     </div>
   </section>
 </main>
+<script>
+  if(window.__noDna){ var __h = document.getElementById('hobbies'); if(__h && __h.parentNode) __h.parentNode.removeChild(__h); }
+</script>
 <footer class="site-footer">
   <p class="mono lower">© 2026 kevin daison. all rights reserved.</p>
 </footer>
@@ -2028,8 +2041,12 @@
   }, {once:true});
 })();
 </script>
-<script src="https://unpkg.com/three-spritetext@1.6.5/dist/three-spritetext.min.js"></script>
-<script src="https://unpkg.com/3d-force-graph@1.70.10/dist/3d-force-graph.min.js"></script>
+<script>
+  if(!window.__noDna){
+    document.write('<script src="https://unpkg.com/three-spritetext@1.6.5/dist/three-spritetext.min.js"><\/script>');
+    document.write('<script src="https://unpkg.com/3d-force-graph@1.70.10/dist/3d-force-graph.min.js"><\/script>');
+  }
+</script>
 <script>
   (function(){
     const el = document.getElementById('graph3d');
