@@ -433,6 +433,20 @@
     100%{clip-path:circle(78% at 50% 50%);transform:none;opacity:1}
   }
   @keyframes lbFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  /* phones: animate only compositor-friendly properties (no clip-path / background repaint) */
+  @media(pointer:coarse){
+    #lightbox.lb-anim{animation:lbFadeFast .3s ease-out both}
+    #lightbox.lb-anim .lb-frame{animation:lbCardInFast .8s cubic-bezier(.22,1,.36,1) both;will-change:transform,opacity}
+    @keyframes lbFadeFast{from{opacity:0}to{opacity:1}}
+    @keyframes lbCardInFast{
+      0%{transform:scale(.5) rotate(-200deg);opacity:0}
+      25%{opacity:1}
+      100%{transform:none;opacity:1}
+    }
+    html.disc-busy .shiny-text,
+    html.disc-busy .audio-toggle:not(.is-muted),
+    html.disc-busy .audio-toggle:not(.is-muted) .vol-wave{animation-play-state:paused}
+  }
   @media(prefers-reduced-motion:reduce){#lightbox.lb-anim,#lightbox.lb-anim .lb-frame,#lightbox.lb-anim .lb-nav,#lightbox.lb-anim .lb-cap{animation:none}}
 
   .lb-loader{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;display:none;pointer-events:none;filter:drop-shadow(0 2px 6px rgba(23,21,28,.35))}
@@ -1129,6 +1143,17 @@
     });
   }
 
+  /* warm the photo the viewer shows first: download + decode ahead of time */
+  function lbPrewarmFirst(item){
+    const m = item && item.media && item.media[0];
+    if(!m || isVideoSrc(m.src) || lbWarm.has(m.src)) return;
+    const im = new Image();
+    im.decoding = 'async';
+    im.src = m.src;
+    lbWarm.set(m.src, im);
+    if(im.decode) im.decode().catch(()=>{});
+  }
+
   function renderLB(){
 
     if(morphBusy) return;
@@ -1236,7 +1261,7 @@
     openSpin:16, openSpinEase:5, openDelay:900,
 
     flowLean:.055, flowLeanMax:.3, flowBank:.32, flowDip:.014, flowDipMax:.09,
-    renderRadius:5, artResolution:2048, artResolutionMobile:1536
+    renderRadius:5, artResolution:2048, artResolutionMobile:1024
   };
 
   function bez(x1,y1,x2,y2){
@@ -1274,13 +1299,19 @@
     if(target !== active){ active = target; onActive(); }
     dirty = true;
   }
+  let prewarmTimer = 0;
   function onActive(){
     showInfo(active);
     ensureArt();
+    // get the photo the viewer will show ready in the background, once the swipe has settled
+    clearTimeout(prewarmTimer);
+    const idx = active;
+    prewarmTimer = setTimeout(()=>{ if(typeof lbPrewarmFirst === 'function') lbPrewarmFirst(photoItems[idx]); }, 350);
   }
   function openActive(){
     if(typeof openLB !== 'function' || openFx) return;
     const i = active;
+    if(typeof lbPrewarmFirst === 'function') lbPrewarmFirst(photoItems[i]);
     if(reduce){ openLB(i); return; }
     openFx = {i, t0:performance.now(), dur:CFG.openDelay};
     dirty = true;
@@ -1427,9 +1458,9 @@
     return new THREE.MeshBasicMaterial({map:tex, transparent:true, opacity:.8, depthWrite:false, side:THREE.DoubleSide});
   })();
 
-  const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
+  const maxAniso = Math.min(isCoarse ? 2 : 8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
   const ART = Math.min(renderer.capabilities.maxTextureSize || 2048,
-    window.matchMedia('(max-width:760px)').matches ? CFG.artResolutionMobile : CFG.artResolution);
+    (isCoarse || window.matchMedia('(max-width:760px)').matches) ? CFG.artResolutionMobile : CFG.artResolution);
 
   function toneColors(tone){
     const m = String(tone||'').match(/#[0-9a-f]{3,8}/gi);
@@ -1474,19 +1505,35 @@
     img.crossOrigin = 'anonymous';
     img.decoding = 'async';
     img.onload = ()=>{
-      try{
-        // draw to a scratch canvas first, so a blocked image can't break the main one
-        const s = document.createElement('canvas'); s.width = s.height = ART;
-        const sx = s.getContext('2d');
-        const side = Math.min(img.naturalWidth, img.naturalHeight);
-        sx.drawImage(img, (img.naturalWidth-side)/2, (img.naturalHeight-side)/2, side, side, 0, 0, ART, ART);
-        sx.getImageData(0,0,1,1);
-        d.art.ctx.drawImage(s,0,0);
-        d.art.tex.needsUpdate = true;
-        d.artReady = true;
-        paintOverlay(d, discs.indexOf(d));
-        dirty = true;
-      }catch(err){ warnFace(src); }
+      const go = ()=>{
+        try{
+          const side = Math.min(img.naturalWidth, img.naturalHeight);
+          const ox = (img.naturalWidth-side)/2, oy = (img.naturalHeight-side)/2;
+          // tiny copy: proves the image is readable and gives the average brightness of the rim (one small readback)
+          const Z = 64, sc = document.createElement('canvas'); sc.width = sc.height = Z;
+          const sx = sc.getContext('2d', {willReadFrequently:true});
+          sx.drawImage(img, ox, oy, side, side, 0, 0, Z, Z);
+          const px = sx.getImageData(0,0,Z,Z).data;
+          let sum = 0, cnt = 0; const hz = Z/2;
+          for(let a=0;a<48;a++){
+            const t = a/48*Math.PI*2;
+            const qx = Math.min(Z-1, Math.max(0, Math.round(hz + Math.cos(t)*hz*.915)));
+            const qy = Math.min(Z-1, Math.max(0, Math.round(hz + Math.sin(t)*hz*.915)));
+            const o = (qy*Z + qx)*4;
+            sum += (.2126*px[o] + .7152*px[o+1] + .0722*px[o+2])/255; cnt++;
+          }
+          d.lum = sum/cnt;
+          d.art.ctx.imageSmoothingQuality = 'high';
+          d.art.ctx.drawImage(img, ox, oy, side, side, 0, 0, ART, ART);
+          d.art.tex.needsUpdate = true;
+          d.artReady = true;
+          paintOverlay(d, discs.indexOf(d));
+          queueWarm(d.art.tex); queueWarm(d.ov.tex);
+          dirty = true;
+        }catch(err){ warnFace(src); }
+      };
+      // decode off the main thread first, so drawing it never stalls a swipe
+      if(img.decode) img.decode().then(go, go); else go();
     };
     img.onerror = ()=>warnFace(src);
     img.src = src;
@@ -1512,6 +1559,7 @@
       else     { vt.repeat.set(1,w/h); vt.offset.set(0,(1-w/h)/2); }
       d.frontMat.map = vt; d.frontMat.emissiveMap = vt; d.frontMat.needsUpdate = true;
       d.video = v; d.artReady = true;
+      queueWarm(vt);
       const p = v.play(); if(p && p.catch) p.catch(()=>{});
       dirty = true;
     };
@@ -1564,17 +1612,8 @@
     const ctx = d.ov.ctx, S = d.ov.canvas.width, R = S/2, k = S/1024;
     ctx.clearRect(0,0,S,S);
 
-    // pick light or dark text depending on the artwork
-    let lum = .3;
-    try{
-      let sum = 0, cnt = 0;
-      for(let a=0;a<48;a++){
-        const t = a/48*Math.PI*2, px = Math.round(R + Math.cos(t)*R*.915), py = Math.round(R + Math.sin(t)*R*.915);
-        const q = d.art.ctx.getImageData(px,py,1,1).data;
-        sum += (.2126*q[0] + .7152*q[1] + .0722*q[2])/255; cnt++;
-      }
-      lum = sum/cnt;
-    }catch(e){}
+    // pick light or dark text depending on the artwork (brightness is measured once, when the art loads)
+    const lum = (d.lum != null) ? d.lum : .3;
     INK = lum > .62 ? 'rgba(20,20,20,.42)' : 'rgba(255,255,255,.55)';
 
     ctx.save();
@@ -1633,16 +1672,22 @@
     ]).catch(()=>{}).then(()=>{ discs.forEach(paintOverlay); dirty = true; });
   }
 
+  let curPR = 0;
   function resize(){
     const isNarrow = window.innerWidth <= 760;
     const gr = root.getBoundingClientRect();
     const up = isNarrow ? 0 : Math.max(0, Math.round(gr.top + window.scrollY));
     root.style.setProperty('--disc-up', up + 'px');
     const r = stage.getBoundingClientRect();
-    W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
+    const nW = Math.max(1, Math.round(r.width)), nH = Math.max(1, Math.round(r.height));
+    const pr = Math.min(window.devicePixelRatio||1, 2);
+    if(nW !== W || nH !== H || pr !== curPR){
+      curPR = pr;
+      renderer.setPixelRatio(pr);
+      renderer.setSize(nW,nH,false);
+    }
+    W = nW; H = nH;
     const gh = Math.max(1, H - up);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, isCoarse ? 2.5 : 2));
-    renderer.setSize(W,H,false);
     aspect = W/H;
     const f0 = Math.tan(CFG.cameraFOV*Math.PI/360);
     camera.fov = 2*Math.atan(f0*H/gh)*180/Math.PI;
@@ -1952,22 +1997,61 @@
     tip.style.transform = 'translate(' + Math.round(ptr.x) + 'px,' + Math.round(ptr.y) + 'px)';
   }
 
+  /* pre-upload textures and compile shaders one small step per frame, while the intro screen is still up,
+     so nothing has to be uploaded in the middle of a swipe */
+  const warmQ = [];
+  function queueWarm(t){ if(t && renderer.initTexture && warmQ.indexOf(t) < 0) warmQ.push(t); }
+  discs.forEach(d=>queueWarm(d.ov.tex));
+  let programsWarm = false;
+  function warmStep(now){
+    if(!programsWarm){
+      if(now - bootAt < 250) return;
+      programsWarm = true;
+      try{ renderer.compile(scene, camera); }catch(e){}
+      return;
+    }
+    const t = warmQ.shift();
+    if(t){ try{ renderer.initTexture(t); }catch(e){} }
+  }
+
+  const lbEl = document.getElementById('lightbox');
+  let lbWasOpen = false, lbOpenAt = 0, busy = false, lastVidDirty = 0;
+  const rootEl = document.documentElement;
+
   let last = performance.now(), lastPick = 0;
   function frame(now){
     requestAnimationFrame(frame);
     if(!inView || document.hidden){ last = now; return; }
+
+    // photo viewer covers everything: stop drawing (and decoding video faces) until it closes
+    if(lbEl && lbEl.classList.contains('open')){
+      if(!lbWasOpen){ lbWasOpen = true; lbOpenAt = now; }
+      // desktop keeps drawing while the viewer fades in; phones stop right away
+      if(now - lbOpenAt >= (isCoarse ? 0 : 600)){
+        last = now;
+        discs.forEach(d=>{ if(d.video && !d.video.paused) d.video.pause(); });
+        return;
+      }
+    } else if(lbWasOpen){ lbWasOpen = false; dirty = true; }
+
     const dt = Math.min(.05, Math.max(0,(now-last)/1000)); last = now;
     physics(dt);
-    layout(now,dt);
+    const animating = layout(now,dt);
+    if(isCoarse){
+      const b = dragging || animating;
+      if(b !== busy){ busy = b; rootEl.classList.toggle('disc-busy', b); }
+    }
+    if(!dragging && !openFx) warmStep(now);
+
     let videoLive = false;
     discs.forEach((d,i)=>{
       if(!d.video) return;
-      const near = Math.abs(i-L) <= (isCoarse ? 1.2 : 2.5);
+      const near = Math.abs(i-L) <= (isCoarse ? .75 : 2.5);
       if(near && d.video.paused){ const p = d.video.play(); if(p && p.catch) p.catch(()=>{}); }
       else if(!near && !d.video.paused) d.video.pause();
       if(near && !d.video.paused) videoLive = true;
     });
-    if(videoLive) dirty = true;
+    if(videoLive && (!isCoarse || now - lastVidDirty > 33)){ dirty = true; lastVidDirty = now; }
     if(ptr.inside && !dragging && !isCoarse && now - lastPick > 90){
       lastPick = now;
       const idx = pickAt(ptr.x,ptr.y);
@@ -3062,7 +3146,7 @@
 
   /* ---- Lenis smooth scroll ---- */
   let lenis = null;
-  if(!reduce){
+  if(!reduce && !window.matchMedia('(pointer:coarse)').matches){
     lenis = new Lenis({
       duration:1.2,
       easing:t=>Math.min(1,1.001-Math.pow(2,-10*t)),
