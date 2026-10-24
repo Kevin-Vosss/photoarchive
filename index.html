@@ -1989,6 +1989,16 @@
     d.group.localToWorld(_a); _a.project(camera);
     return {x:(_a.x*.5+.5)*W, y:(-_a.y*.5+.5)*H};
   }
+  const ARC_S = 120, ARC_N = 56;
+  const arcTh = new Float32Array(ARC_S), arcX = new Float32Array(ARC_S), arcY = new Float32Array(ARC_S);
+  function measureArc(el){
+    // text length per 1px of font-size (measured once, then scaled linearly: no per-frame layout)
+    const keep = el.text.style.fontSize;
+    el.text.style.fontSize = '100px';
+    const len = el.text.getComputedTextLength();
+    el.text.style.fontSize = keep;
+    if(len > 0) el.perPx = len/100;
+  }
   function updateArcs(){
     const on = arcOn();
     root.classList.toggle('has-arc', on);
@@ -1996,36 +2006,45 @@
     discs.forEach((d,i)=>{
       const el = arcEls[i];
       const m = Math.abs(i - L);
-      let op = clamp(1 - (m*ARC.fade), 0, 1) * d.e * (1 - clamp(d.openK*1.6,0,1));
+      const op = clamp(1 - (m*ARC.fade), 0, 1) * d.e * (1 - clamp(d.openK*1.6,0,1));
       if(!d.group.visible || op < .01){ el.text.style.opacity = 0; return; }
       const c = arcPoint(d,0,0);
-      const rimPx = Math.hypot(arcPoint(d,0,1).x-c.x, arcPoint(d,0,1).y-c.y);
-      const fs = Math.round(clamp(rimPx*.18, 16, 34));
-      // sample the rim just outside the disc, keep the part that sits between the two screen angles
-      const pts = [];
-      for(let k=0;k<ARC.samples;k++){
-        const a = k/ARC.samples*Math.PI*2;
-        const p = arcPoint(d,a,ARC.gap);
+      const r1 = arcPoint(d,0,1);
+      const rimPx = Math.hypot(r1.x-c.x, r1.y-c.y);
+      // dense rim sample just outside the disc, with its screen angle around the disc centre
+      for(let k=0;k<ARC_S;k++){
+        const p = arcPoint(d, k/ARC_S*Math.PI*2, ARC.gap);
+        arcX[k] = p.x; arcY[k] = p.y;
         let th = Math.atan2(-(p.y-c.y), p.x-c.x)*180/Math.PI; if(th < 0) th += 360;
-        if(th <= ARC.from && th >= ARC.to) pts.push({th, x:p.x, y:p.y});
+        arcTh[k] = th;
       }
-      if(pts.length < 4){ el.text.style.opacity = 0; return; }
-      pts.sort((u,v)=>v.th-u.th);               // clockwise on screen: lower-left -> up -> top
-      let dstr = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
-      for(let k=1;k<pts.length;k++) dstr += 'L' + pts[k].x.toFixed(1) + ' ' + pts[k].y.toFixed(1);
+      // the path always spans exactly ARC.from -> ARC.to (clockwise), so its ends never snap between samples
+      let dstr = '', plen = 0, px = 0, py = 0, got = 0;
+      for(let n=0;n<ARC_N;n++){
+        const th = ARC.from + (ARC.to-ARC.from)*n/(ARC_N-1);
+        let hx = NaN, hy = NaN;
+        for(let k=0;k<ARC_S;k++){
+          const k2 = (k+1)%ARC_S;
+          const dd = ((arcTh[k2]-arcTh[k]+540)%360)-180;
+          const rr = ((th-arcTh[k]+540)%360)-180;
+          if(dd !== 0 && (dd>0 ? (rr>=0 && rr<=dd) : (rr<=0 && rr>=dd))){
+            const t = rr/dd;
+            hx = arcX[k] + (arcX[k2]-arcX[k])*t; hy = arcY[k] + (arcY[k2]-arcY[k])*t;
+            break;
+          }
+        }
+        if(hx !== hx) continue;
+        dstr += (got ? 'L' : 'M') + hx.toFixed(2) + ' ' + hy.toFixed(2);
+        if(got) plen += Math.hypot(hx-px, hy-py);
+        px = hx; py = hy; got++;
+      }
+      if(got < 8){ el.text.style.opacity = 0; return; }
       el.path.setAttribute('d', dstr);
-      const settled = d.e >= .999 && !dragging && !openFx && Math.abs(V) < .02 && Math.abs(target-L) < .01;
-      if(el.fs !== fs || arcFitDirty || !settled){
-        el.fs = fs; el.text.style.fontSize = fs + 'px';
-        el.fitPending = true;
-      }
-      if(el.fitPending && settled && m < .5){
-        // shrink long titles so they never run off the end of the arc
-        el.text.style.fontSize = fs + 'px';
-        const avail = el.path.getTotalLength() * .94, need = el.text.getComputedTextLength();
-        if(need > avail && need > 0) el.text.style.fontSize = Math.max(8, fs*avail/need).toFixed(2) + 'px';
-        el.fitPending = false;
-      }
+      if(!el.perPx || arcFitDirty) measureArc(el);
+      // size follows the disc smoothly; long titles shrink continuously to fit the arc (no pops)
+      let fs = clamp(rimPx*.18, 16, 34);
+      if(el.perPx) fs = Math.min(fs, plen*.94/el.perPx);
+      el.text.style.fontSize = Math.max(8, fs).toFixed(2) + 'px';
       el.text.style.opacity = (op*.92).toFixed(3);
     });
     arcFitDirty = false;
