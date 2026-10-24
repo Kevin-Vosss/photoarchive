@@ -1965,7 +1965,7 @@
 
   /* ---- mobile arc titles: each disc's title follows its upper-left rim ---- */
   const SVGNS = 'http://www.w3.org/2000/svg';
-  const arcOn = ()=> narrow || isCoarse;
+  const arcOn = ()=> true;   // arc titles on every screen size (replaces the old hover callout)
   const ARC = {from:202, to:62, gap:1.075, samples:96, fade:1.25};   // screen degrees (0 = right, 90 = up), rim radius multiplier
   const arcSvg = document.createElementNS(SVGNS,'svg');
   arcSvg.setAttribute('class','disc-arc'); arcSvg.setAttribute('aria-hidden','true');
@@ -1993,13 +1993,14 @@
     const on = arcOn();
     root.classList.toggle('has-arc', on);
     if(!on) return;
-    const fs = clamp(W*.062, 16, 24);
     discs.forEach((d,i)=>{
       const el = arcEls[i];
       const m = Math.abs(i - L);
       let op = clamp(1 - (m*ARC.fade), 0, 1) * d.e * (1 - clamp(d.openK*1.6,0,1));
       if(!d.group.visible || op < .01){ el.text.style.opacity = 0; return; }
       const c = arcPoint(d,0,0);
+      const rimPx = Math.hypot(arcPoint(d,0,1).x-c.x, arcPoint(d,0,1).y-c.y);
+      const fs = Math.round(clamp(rimPx*.18, 16, 34));
       // sample the rim just outside the disc, keep the part that sits between the two screen angles
       const pts = [];
       for(let k=0;k<ARC.samples;k++){
@@ -2065,7 +2066,7 @@
   }
 
   function updateTip(){
-    const show = hoverIdx >= 0 && ptr.inside && !dragging && !isCoarse && !narrow && !openFx;
+    const show = false;   // hover callout retired: titles now sit on the disc arc
     if(!show){
       if(tipIdx !== -1){ tip.classList.remove('is-on','is-play'); tipIdx = -1; tipTok++; }
       return;
