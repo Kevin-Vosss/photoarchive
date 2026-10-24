@@ -584,6 +584,13 @@
     .disc-tip.is-on .tip-pulse{animation:none}
   }
   @media(pointer:coarse){.disc-tip{display:none}}
+  /* ---- mobile: disc title set on an arc hugging the disc's upper-left rim ---- */
+  .disc-arc{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:12;display:none}
+  .disc-gallery.has-arc .disc-arc{display:block}
+  .disc-arc text{
+    font-family:'Space Mono',monospace;font-weight:700;font-size:12px;letter-spacing:.14em;
+    fill:#000;text-transform:uppercase;opacity:0;
+  }
   .disc-warn{position:absolute;left:30px;bottom:64px;z-index:13;max-width:360px;padding:9px 11px;background:#000;color:#fff;font:10px/1.45 'Space Mono',monospace;letter-spacing:.02em}
   .disc-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
@@ -1686,6 +1693,7 @@
     renderer.setSize(W,H,false);
     renderer.render(scene,camera);   // redraw in the same task so there is no blank frame
     dirty = false;
+    if(typeof updateArcs === 'function' && arcSvg) updateArcs();
   }
   function resize(){
     const isNarrow = window.innerWidth <= 760;
@@ -1954,6 +1962,76 @@
   });
 
 
+  /* ---- mobile arc titles: each disc's title follows its upper-left rim ---- */
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const arcOn = ()=> narrow || isCoarse;
+  const ARC = {from:202, to:62, gap:1.075, samples:96, fade:1.25};   // screen degrees (0 = right, 90 = up), rim radius multiplier
+  const arcSvg = document.createElementNS(SVGNS,'svg');
+  arcSvg.setAttribute('class','disc-arc'); arcSvg.setAttribute('aria-hidden','true');
+  const arcDefs = document.createElementNS(SVGNS,'defs'); arcSvg.appendChild(arcDefs);
+  stage.appendChild(arcSvg);
+  const arcEls = discs.map((d,i)=>{
+    const path = document.createElementNS(SVGNS,'path'); path.id = 'discArcPath'+i;
+    arcDefs.appendChild(path);
+    const text = document.createElementNS(SVGNS,'text');
+    text.setAttribute('text-anchor','middle');
+    const tp = document.createElementNS(SVGNS,'textPath');
+    tp.setAttribute('href','#discArcPath'+i); tp.setAttribute('startOffset','50%');
+    tp.textContent = String(d.item.title).toUpperCase();
+    text.appendChild(tp); arcSvg.appendChild(text);
+    return {path, text, fit:0};
+  });
+  let arcFitDirty = true, arcSettleAt = 0;
+  const _a = new THREE.Vector3();
+  function arcPoint(d,a,r){
+    _a.set(Math.cos(a)*r, Math.sin(a)*r, 0);
+    d.group.localToWorld(_a); _a.project(camera);
+    return {x:(_a.x*.5+.5)*W, y:(-_a.y*.5+.5)*H};
+  }
+  function updateArcs(){
+    const on = arcOn();
+    root.classList.toggle('has-arc', on);
+    if(!on) return;
+    const fs = clamp(W*.036, 11, 15);
+    discs.forEach((d,i)=>{
+      const el = arcEls[i];
+      const m = Math.abs(i - L);
+      let op = clamp(1 - (m*ARC.fade), 0, 1) * d.e * (1 - clamp(d.openK*1.6,0,1));
+      if(!d.group.visible || op < .01){ el.text.style.opacity = 0; return; }
+      const c = arcPoint(d,0,0);
+      // sample the rim just outside the disc, keep the part that sits between the two screen angles
+      const pts = [];
+      for(let k=0;k<ARC.samples;k++){
+        const a = k/ARC.samples*Math.PI*2;
+        const p = arcPoint(d,a,ARC.gap);
+        let th = Math.atan2(-(p.y-c.y), p.x-c.x)*180/Math.PI; if(th < 0) th += 360;
+        if(th <= ARC.from && th >= ARC.to) pts.push({th, x:p.x, y:p.y});
+      }
+      if(pts.length < 4){ el.text.style.opacity = 0; return; }
+      pts.sort((u,v)=>v.th-u.th);               // clockwise on screen: lower-left -> up -> top
+      let dstr = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
+      for(let k=1;k<pts.length;k++) dstr += 'L' + pts[k].x.toFixed(1) + ' ' + pts[k].y.toFixed(1);
+      el.path.setAttribute('d', dstr);
+      const settled = d.e >= .999 && !dragging && !openFx && Math.abs(V) < .02 && Math.abs(target-L) < .01;
+      if(el.fs !== fs || arcFitDirty || !settled){
+        el.fs = fs; el.text.style.fontSize = fs + 'px';
+        el.fitPending = true;
+      }
+      if(el.fitPending && settled && m < .5){
+        // shrink long titles so they never run off the end of the arc
+        el.text.style.fontSize = fs + 'px';
+        const avail = el.path.getTotalLength() * .94, need = el.text.getComputedTextLength();
+        if(need > avail && need > 0) el.text.style.fontSize = Math.max(8, fs*avail/need).toFixed(2) + 'px';
+        el.fitPending = false;
+      }
+      el.text.style.opacity = (op*.92).toFixed(3);
+    });
+    arcFitDirty = false;
+  }
+  window.addEventListener('resize', ()=>{ arcFitDirty = true; dirty = true; });
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ arcFitDirty = true; dirty = true; });
+  if(document.fonts && document.fonts.load) document.fonts.load('700 12px "Space Mono"').then(()=>{ arcFitDirty = true; dirty = true; }).catch(()=>{});
+
   /* ---- sci-fi hover callout ---- */
   const tip = document.createElement('div');
   tip.className = 'disc-tip'; tip.setAttribute('aria-hidden','true');
@@ -1986,7 +2064,7 @@
   }
 
   function updateTip(){
-    const show = hoverIdx >= 0 && ptr.inside && !dragging && !isCoarse && !openFx;
+    const show = hoverIdx >= 0 && ptr.inside && !dragging && !isCoarse && !narrow && !openFx;
     if(!show){
       if(tipIdx !== -1){ tip.classList.remove('is-on','is-play'); tipIdx = -1; tipTok++; }
       return;
@@ -2073,7 +2151,8 @@
       if(idx !== hoverIdx){ hoverIdx = idx; dirty = true; }
     }
     updateTip();
-    if(dirty){ renderer.render(scene,camera); dirty = false; }
+    if(dirty){ renderer.render(scene,camera); dirty = false; updateArcs(); arcSettleAt = now + 160; }
+    else if(arcSettleAt && now > arcSettleAt){ arcSettleAt = 0; updateArcs(); }
   }
 
   showInfo(0);
