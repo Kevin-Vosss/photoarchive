@@ -15,7 +15,7 @@
 <title>Kevin Daison — photo archive</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Shrikhand&display=swap" rel="stylesheet">
 <style>
   :root{
     --bar-zoom:1.45;
@@ -588,8 +588,8 @@
   .disc-arc{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:12;display:none}
   .disc-gallery.has-arc .disc-arc{display:block}
   .disc-arc text{
-    font-family:'Space Mono',monospace;font-weight:700;font-size:12px;letter-spacing:.14em;
-    fill:#000;text-transform:uppercase;opacity:0;
+    font-family:'Shrikhand','Fraunces',Georgia,serif;font-weight:400;font-size:16px;letter-spacing:.04em;
+    fill:#000;opacity:0;
   }
   .disc-warn{position:absolute;left:30px;bottom:64px;z-index:13;max-width:360px;padding:9px 11px;background:#000;color:#fff;font:10px/1.45 'Space Mono',monospace;letter-spacing:.02em}
   .disc-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -1977,7 +1977,7 @@
     text.setAttribute('text-anchor','middle');
     const tp = document.createElementNS(SVGNS,'textPath');
     tp.setAttribute('href','#discArcPath'+i); tp.setAttribute('startOffset','50%');
-    tp.textContent = String(d.item.title).toUpperCase();
+    tp.textContent = String(d.item.title);
     text.appendChild(tp); arcSvg.appendChild(text);
     return {path, text, fit:0};
   });
@@ -1992,7 +1992,7 @@
     const on = arcOn();
     root.classList.toggle('has-arc', on);
     if(!on) return;
-    const fs = clamp(W*.036, 11, 15);
+    const fs = clamp(W*.05, 14, 20);
     discs.forEach((d,i)=>{
       const el = arcEls[i];
       const m = Math.abs(i - L);
@@ -2030,7 +2030,7 @@
   }
   window.addEventListener('resize', ()=>{ arcFitDirty = true; dirty = true; });
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ arcFitDirty = true; dirty = true; });
-  if(document.fonts && document.fonts.load) document.fonts.load('700 12px "Space Mono"').then(()=>{ arcFitDirty = true; dirty = true; }).catch(()=>{});
+  if(document.fonts && document.fonts.load) document.fonts.load('400 16px "Shrikhand"').then(()=>{ arcFitDirty = true; dirty = true; }).catch(()=>{});
 
   /* ---- sci-fi hover callout ---- */
   const tip = document.createElement('div');
