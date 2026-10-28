@@ -28,7 +28,7 @@
     
     
   }
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html{scroll-behavior:smooth}
   body{
     margin:0;
@@ -40,6 +40,8 @@
     overflow-x:hidden;
   }
   a{color:inherit;text-decoration:none}
+  a:focus:not(:focus-visible){outline:none}
+  .brand,.navlinks a,.intro-screen{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   button{font:inherit;color:inherit}
   .mono{font-family:'Space Mono',monospace}
   .lower{text-transform:lowercase}
@@ -443,7 +445,6 @@
       25%{opacity:1}
       100%{transform:none;opacity:1}
     }
-    html.disc-busy .shiny-text,
     html.disc-busy .audio-toggle:not(.is-muted),
     html.disc-busy .audio-toggle:not(.is-muted) .vol-wave{animation-play-state:paused}
   }
