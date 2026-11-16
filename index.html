@@ -3406,7 +3406,7 @@
   const POINT = 135 * Math.PI/180;  // plug direction on screen (135deg = up-left, like an arrow)
   const TILT  = -0.75;              // roll around the drive's own length (shows its side)
   const OPEN  = Math.PI;            // how far the cover swivels away when moving
-  const IDLE  = 180;                // ms without movement before the cover closes
+  const IDLE  = 1400;               // ms without movement before the cover closes (never closes while over a link)
 
   /* ---- renderer ---- */
   let renderer;
@@ -3534,22 +3534,44 @@
     });
   }
 
+  let hovering = false, lastX = 0, lastY = 0;
+  const armIdle = ()=>{
+    clearTimeout(idleT);
+    idleT = setTimeout(()=>{ if(!hovering) setOpen(false); }, IDLE);
+  };
+  const setHover = on=>{
+    if(on === hovering) return;
+    hovering = on;
+    refreshScale();
+    if(on){ clearTimeout(idleT); setOpen(true); }   // over a link: stay open until you leave it
+    else if(open){ armIdle(); }
+  };
+
   window.addEventListener('mousemove', e=>{
+    lastX = e.clientX; lastY = e.clientY;
     canvas.style.transform = 'translate3d('+(e.clientX-HOT.x)+'px,'+(e.clientY-HOT.y)+'px,0)';
     if(!shown){ shown = true; canvas.style.opacity = 1; }
     vx += e.movementX || 0;
     setOpen(true);
-    clearTimeout(idleT);
-    idleT = setTimeout(()=>setOpen(false), IDLE);
+    if(!hovering) armIdle();
   }, {passive:true});
 
   document.documentElement.addEventListener('mouseleave', ()=>{ canvas.style.opacity = 0; });
   document.documentElement.addEventListener('mouseenter', ()=>{ if(shown) canvas.style.opacity = 1; });
 
-  let down = false, hovering = false;
-  const refreshScale = ()=>{ scTo = (hovering ? 1.2 : 1) * (down ? .86 : 1); };
+  let down = false;
+  function refreshScale(){ scTo = (hovering ? 1.2 : 1) * (down ? .86 : 1); }
   window.addEventListener('mouseover', e=>{
-    hovering = !!(e.target.closest && e.target.closest(targetSelector)); refreshScale();
+    setHover(!!(e.target.closest && e.target.closest(targetSelector)));
+  }, {passive:true});
+  let scrollRaf = 0;
+  window.addEventListener('scroll', ()=>{      // page moved under a still mouse
+    if(scrollRaf) return;
+    scrollRaf = requestAnimationFrame(()=>{
+      scrollRaf = 0;
+      const el = document.elementFromPoint(lastX, lastY);
+      setHover(!!(el && el.closest && el.closest(targetSelector)));
+    });
   }, {passive:true});
   window.addEventListener('mousedown', ()=>{ down = true;  refreshScale(); });
   window.addEventListener('mouseup',   ()=>{ down = false; refreshScale(); });
