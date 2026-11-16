@@ -498,25 +498,6 @@
   .lb-count:empty{display:none}
   .has-custom-cursor body,.has-custom-cursor a,.has-custom-cursor button,.has-custom-cursor [role="button"]{cursor:none!important}
 
-  .blob-cursor-container{
-    position:fixed;top:0;left:0;width:0;height:0;
-    pointer-events:none;z-index:9999;
-
-    mix-blend-mode:difference;
-  }
-  .blob-cursor-goo{
-
-    position:absolute;top:0;left:0;width:0;height:0;
-    filter:url(#blobGoo);
-  }
-  .blob-cursor-blob{
-    position:absolute;left:0;top:0;
-    border-radius:50%;
-    background:#fff;
-
-  }
-  @media (pointer:coarse){
-  .blob-cursor-container{display:none}}
 
   @media(max-width:760px){
     .header-inner{grid-template-columns:1fr;padding:16px 20px 22px;gap:24px}
@@ -710,7 +691,6 @@
   .scroll-progress{position:fixed;left:0;top:0;height:2px;width:100%;z-index:30;pointer-events:none;background:var(--accent);transform:scaleX(0);transform-origin:0 50%}
 
   .has-custom-cursor,.has-custom-cursor *{cursor:none!important}
-  .blob-cursor-container{z-index:200000}
   @media(max-width:460px){.navlinks{gap:16px;padding:13px 20px}.navlinks a{font-size:12px}}
 </style>
 <style>
@@ -894,12 +874,6 @@
 <style>
   /* ===== hover pill: centred on the link ===== */
   .lg>.lg__ind{inset:auto;top:50%;left:0;bottom:auto;right:auto}
-
-  /* ===== cursor: true white (no difference-blend inversion) ===== */
-  .blob-cursor-container{
-    mix-blend-mode:normal;
-    filter:drop-shadow(0 2px 6px rgba(60,80,160,.35));
-  }
 
   /* ===== CD-marker (sharpie-on-disc) index labels ===== */
   .section-label,.section-count{
@@ -3419,161 +3393,177 @@
 })();
 </script>
 <script>
-(function blobCursor(){
-  if(!window.gsap || !window.matchMedia('(pointer:fine)').matches) return;
-  document.documentElement.classList.add('has-custom-cursor');
-  const gsap = window.gsap;
+(function pendriveCursor(){
+  if(!window.gsap || !window.THREE || !window.matchMedia('(pointer:fine)').matches) return;
+  const THREE = window.THREE, gsap = window.gsap;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const targetSelector = 'a,button,[role="button"],.lb-close,.lb-nav span';
-  (function(){
 
-      const blobColor = '#ffffff';
-      const hoverScale = 1.9, reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* ---- tweakables ---- */
+  const CSS_W = 190, CSS_H = 190;   // cursor canvas size (px)
+  const UNIT  = 11;                 // px per model unit  (bigger = bigger pendrive)
+  const HOT   = {x:36, y:36};       // hotspot inside the canvas = USB plug tip
+  const POINT = 135 * Math.PI/180;  // plug direction on screen (135deg = up-left, like an arrow)
+  const TILT  = -0.75;              // roll around the drive's own length (shows its side)
+  const OPEN  = Math.PI;            // how far the cover swivels away when moving
+  const IDLE  = 180;                // ms without movement before the cover closes
 
-      const blobSpecs = [
-        {size:16, duration:0.08, ease:'power3.out'},
-        {size:30, duration:0.24, ease:'power3.out'},
-        {size:22, duration:0.4,  ease:'power3.out'}
-      ];
+  /* ---- renderer ---- */
+  let renderer;
+  try{
+    renderer = new THREE.WebGLRenderer({alpha:true, antialias:true, powerPreference:'low-power'});
+  }catch(err){ return; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setSize(CSS_W, CSS_H, false);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  const canvas = renderer.domElement;
+  canvas.id = 'penCursor';
+  canvas.setAttribute('aria-hidden','true');
+  canvas.style.cssText =
+    'position:fixed;left:0;top:0;width:'+CSS_W+'px;height:'+CSS_H+'px;pointer-events:none;z-index:200000;' +
+    'opacity:0;transition:opacity .2s ease;will-change:transform;' +
+    'filter:drop-shadow(0 5px 6px rgba(15,20,40,.28));';
+  document.body.appendChild(canvas);
 
-      const svgNS = 'http://www.w3.org/2000/svg';
-      const svg = document.createElementNS(svgNS,'svg');
-      svg.setAttribute('width','0');
-      svg.setAttribute('height','0');
-      svg.style.position = 'absolute';
-      svg.innerHTML =
-        '<filter id="blobGoo"><feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>' +
-        '<feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 14 -5.5" result="goo"/>' +
-        '<feComposite in="SourceGraphic" in2="goo" operator="atop"/></filter>';
-      document.body.appendChild(svg);
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-HOT.x/UNIT, (CSS_W-HOT.x)/UNIT, HOT.y/UNIT, -(CSS_H-HOT.y)/UNIT, -50, 50);
+  camera.position.z = 10;
 
-      const container = document.createElement('div');
-      container.className = 'blob-cursor-container';
-      document.body.appendChild(container);
-      const goo = document.createElement('div');
-      goo.className = 'blob-cursor-goo';
-      container.appendChild(goo);
+  /* ---- studio reflections so the metal reads as metal ---- */
+  function makeEnv(){
+    const pm = new THREE.PMREMGenerator(renderer);
+    const sc = new THREE.Scene();
+    const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+    const g = c.getContext('2d'), gr = g.createLinearGradient(0,0,0,256);
+    gr.addColorStop(0,'#f6f8ff'); gr.addColorStop(.45,'#b9c6dc'); gr.addColorStop(.55,'#5a6379'); gr.addColorStop(1,'#1d2130');
+    g.fillStyle = gr; g.fillRect(0,0,4,256);
+    const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding;
+    sc.add(new THREE.Mesh(new THREE.SphereGeometry(10,32,16), new THREE.MeshBasicMaterial({map:tex, side:THREE.BackSide})));
+    const panel = (w,h,x,y,z)=>{
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshBasicMaterial({color:0xffffff, side:THREE.DoubleSide}));
+      m.position.set(x,y,z); m.lookAt(0,0,0); sc.add(m);
+    };
+    panel(6,2,-6,5,5); panel(2,6,7,1,-3); panel(5,1.5,0,8,-2); panel(1.5,5,-8,-1,2);
+    const rt = pm.fromScene(sc, .03);
+    pm.dispose();
+    return rt.texture;
+  }
+  const envMap = makeEnv();
 
-      const blobs = blobSpecs.map(({size})=>{
-        const b = document.createElement('div');
-        b.className = 'blob-cursor-blob';
-        b.style.width = size+'px';
-        b.style.height = size+'px';
-        b.style.marginLeft = (-size/2)+'px';
-        b.style.marginTop = (-size/2)+'px';
-        goo.appendChild(b);
-        return b;
-      });
+  const silver = new THREE.MeshStandardMaterial({color:0xdfe2e7, metalness:1,  roughness:.26, envMap, side:THREE.DoubleSide});
+  const steel  = new THREE.MeshStandardMaterial({color:0xc4c8ce, metalness:1,  roughness:.34, envMap});
+  const black  = new THREE.MeshStandardMaterial({color:0x0b0b0e, metalness:.1, roughness:.42, envMap, envMapIntensity:.9});
+  const gloss  = new THREE.MeshStandardMaterial({color:0x050507, metalness:.2, roughness:.18, envMap});
 
-      const getContainingBlock = element => {
-        let node = element && element.parentElement;
-        while(node && node !== document.documentElement){
-          const style = getComputedStyle(node);
-          if(
-            style.transform !== 'none' ||
-            style.perspective !== 'none' ||
-            style.filter !== 'none' ||
-            style.willChange.includes('transform') ||
-            style.willChange.includes('perspective') ||
-            style.willChange.includes('filter') ||
-            /paint|layout|strict|content/.test(style.contain)
-          ) return node;
-          node = node.parentElement;
-        }
-        return null;
-      };
-      const getContainingBlockOffset = block=>{
-        if(!block) return {x:0,y:0};
-        const rect = block.getBoundingClientRect();
-        return {x:rect.left + block.clientLeft, y:rect.top + block.clientTop};
-      };
+  /* ---- the pendrive (length on +x, width on y, thickness on z) ---- */
+  const BODY_T = .36, PX = -.9;          // body thickness, pivot x
+  const BR = .65, BF = 1.6;              // body half-width, body front x
+  const CR = .72, CF = 2.72, PL = .05;   // cover half-width, cover front x, plate thickness
+  const ZP = .265;                       // plate centre z
 
-      let containingBlock = getContainingBlock(container);
-      const applyOffset = ()=>{
-        const {x,y} = getContainingBlockOffset(containingBlock);
-        gsap.set(container, {x:-x, y:-y});
-      };
-      applyOffset();
-      window.addEventListener('resize', ()=>{ containingBlock = getContainingBlock(container); applyOffset(); });
+  function outline(R, fx, fr, holeR){
+    const sh = new THREE.Shape();
+    sh.moveTo(PX,-R);
+    sh.lineTo(fx-fr,-R); sh.quadraticCurveTo(fx,-R,fx,-R+fr);
+    sh.lineTo(fx,R-fr);  sh.quadraticCurveTo(fx,R,fx-fr,R);
+    sh.lineTo(PX,R);
+    sh.absarc(PX,0,R,Math.PI/2,Math.PI*1.5,false);
+    if(holeR){ const h = new THREE.Path(); h.absarc(PX,0,holeR,0,Math.PI*2,true); sh.holes.push(h); }
+    return sh;
+  }
 
-      const startX = window.innerWidth/2, startY = window.innerHeight/2;
-      gsap.set(blobs, {x:startX, y:startY});
+  const model = new THREE.Group();
 
-      const movers = blobs.map((b,i)=>({
-        x: gsap.quickTo(b, 'x', {duration: reduceMotion ? 0 : blobSpecs[i].duration, ease: blobSpecs[i].ease}),
-        y: gsap.quickTo(b, 'y', {duration: reduceMotion ? 0 : blobSpecs[i].duration, ease: blobSpecs[i].ease})
-      }));
+  // fixed part: black body, pivot cap, USB plug
+  const body = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(outline(BR, BF, .12), {depth:BODY_T, bevelEnabled:true, bevelThickness:.04, bevelSize:.04, bevelSegments:3, curveSegments:28}),
+    black);
+  body.geometry.translate(0,0,-BODY_T/2);
+  model.add(body);
 
-      let lastMoveX = startX, lastMoveY = startY;
-      const moveCursor = (x,y)=>{
-        lastMoveX = x; lastMoveY = y;
-        movers.forEach(m=>{ m.x(x); m.y(y); });
-      };
-      window.addEventListener('mousemove', e=>moveCursor(e.clientX, e.clientY));
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.6,40), gloss);
+  cap.geometry.rotateX(Math.PI/2); cap.position.set(PX,0,0);
+  model.add(cap);
 
-      let activeTarget = null;
-      let currentLeaveHandler = null;
+  const plug = new THREE.Mesh(new THREE.BoxGeometry(1.02,.88,.26), steel);
+  plug.position.set(2.04,0,0); model.add(plug);
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(.02,.72,.12), black);
+  slot.position.set(2.551,0,0); model.add(slot);
+  const tongue = new THREE.Mesh(new THREE.BoxGeometry(.021,.66,.035), silver);
+  tongue.position.set(2.552,0,0); model.add(tongue);
 
-      const cleanupTarget = target=>{
-        if(currentLeaveHandler) target.removeEventListener('mouseleave', currentLeaveHandler);
-        currentLeaveHandler = null;
-      };
+  // swivel cover: top plate + bottom plate + rounded back wall, hinged on the pivot
+  const cover = new THREE.Group();
+  cover.position.set(PX,0,0);
+  const plateOpts = {depth:PL, bevelEnabled:true, bevelThickness:.012, bevelSize:.012, bevelSegments:2, curveSegments:28};
+  const topPlate = new THREE.Mesh(new THREE.ExtrudeGeometry(outline(CR, CF, .14, .39), plateOpts), silver);
+  topPlate.geometry.translate(-PX,0,ZP-PL/2);
+  const botPlate = new THREE.Mesh(new THREE.ExtrudeGeometry(outline(CR, CF, .14, .33), plateOpts), silver);
+  botPlate.geometry.translate(-PX,0,-ZP-PL/2);
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(CR+.005,CR+.005,.604,48,1,true,Math.PI,Math.PI), silver);
+  wall.geometry.rotateX(Math.PI/2);
+  cover.add(topPlate, botPlate, wall);
+  model.add(cover);
 
-      const setHoverVisual = (on, instant)=>{
-        gsap.to(blobs, {
-          scale: on ? hoverScale : 1,
-          backgroundColor: blobColor,
-          duration: instant ? 0 : 0.2, ease:'power2.out', overwrite:'auto'
-        });
-      };
+  model.position.x = -2.55;               // plug tip sits on the hotspot
 
-      const enterTarget = target=>{
-        if(!target || activeTarget === target) return;
-        if(activeTarget) cleanupTarget(activeTarget);
+  const view  = new THREE.Group(); view.rotation.x = TILT;  view.add(model);
+  const spin  = new THREE.Group(); spin.rotation.z = POINT; spin.add(view);
+  const world = new THREE.Group(); world.add(spin);
+  scene.add(world);
 
-        activeTarget = target;
-        setHoverVisual(true, false);
+  const key = new THREE.DirectionalLight(0xffffff, .7); key.position.set(-3,5,8); scene.add(key);
+  scene.add(new THREE.AmbientLight(0xffffff, .35));
 
-        const leaveHandler = ()=>{
-          activeTarget = null;
-          setHoverVisual(false, false);
-          cleanupTarget(target);
-        };
+  /* ---- state + animation ---- */
+  const st = {a:0};
+  let open = false, idleT = null, dirty = true, shown = false;
+  let sway = 0, lastSway = 0, vx = 0;
+  let scNow = 1, scTo = 1;
 
-        currentLeaveHandler = leaveHandler;
-        target.addEventListener('mouseleave', leaveHandler);
-      };
+  function setOpen(v){
+    if(v === open) return;
+    open = v;
+    gsap.to(st, {
+      a: v ? OPEN : 0,
+      duration: reduce ? .01 : (v ? .42 : .7),
+      ease: v ? 'back.out(1.5)' : 'power3.inOut',
+      overwrite: true,
+      onUpdate(){ cover.rotation.z = st.a; dirty = true; }
+    });
+  }
 
-      const enterHandler = e=>{
-        const target = e.target.closest && e.target.closest(targetSelector);
-        enterTarget(target);
-      };
+  window.addEventListener('mousemove', e=>{
+    canvas.style.transform = 'translate3d('+(e.clientX-HOT.x)+'px,'+(e.clientY-HOT.y)+'px,0)';
+    if(!shown){ shown = true; canvas.style.opacity = 1; }
+    vx += e.movementX || 0;
+    setOpen(true);
+    clearTimeout(idleT);
+    idleT = setTimeout(()=>setOpen(false), IDLE);
+  }, {passive:true});
 
-      window.addEventListener('mouseover', enterHandler, {passive:true});
+  document.documentElement.addEventListener('mouseleave', ()=>{ canvas.style.opacity = 0; });
+  document.documentElement.addEventListener('mouseenter', ()=>{ if(shown) canvas.style.opacity = 1; });
 
-      window.addEventListener('scroll', ()=>{
-        if(!activeTarget) return;
-        const elementUnderMouse = document.elementFromPoint(lastMoveX, lastMoveY);
-        const isStillOverTarget = elementUnderMouse &&
-          (elementUnderMouse === activeTarget || elementUnderMouse.closest(targetSelector) === activeTarget);
-        if(!isStillOverTarget && currentLeaveHandler) currentLeaveHandler();
-      }, {passive:true});
+  let down = false, hovering = false;
+  const refreshScale = ()=>{ scTo = (hovering ? 1.2 : 1) * (down ? .86 : 1); };
+  window.addEventListener('mouseover', e=>{
+    hovering = !!(e.target.closest && e.target.closest(targetSelector)); refreshScale();
+  }, {passive:true});
+  window.addEventListener('mousedown', ()=>{ down = true;  refreshScale(); });
+  window.addEventListener('mouseup',   ()=>{ down = false; refreshScale(); });
 
-      gsap.ticker.add(()=>{
-        const el = document.elementFromPoint(lastMoveX, lastMoveY);
-        const target = el && el.closest && el.closest(targetSelector);
-        if(target === activeTarget) return;
-        if(target) enterTarget(target);
-        else if(currentLeaveHandler) currentLeaveHandler();
-      });
+  gsap.ticker.add(()=>{
+    vx *= .82;
+    const target = Math.max(-.4, Math.min(.4, vx * .012));
+    sway += (target - sway) * .15;
+    if(Math.abs(sway - lastSway) > .001){ lastSway = sway; spin.rotation.z = POINT + sway; dirty = true; }
+    if(Math.abs(scTo - scNow) > .002){ scNow += (scTo - scNow) * .2; world.scale.setScalar(scNow); dirty = true; }
+    if(dirty){ renderer.render(scene, camera); dirty = false; }
+  });
 
-      window.addEventListener('mousedown', ()=>{
-        gsap.to(blobs, {scale: (activeTarget ? hoverScale : 1) * 0.7, duration:0.2});
-      });
-      window.addEventListener('mouseup', ()=>{
-        gsap.to(blobs, {scale: activeTarget ? hoverScale : 1, duration:0.3});
-      });
-
-  })();
+  document.documentElement.classList.add('has-custom-cursor');
 })();
 </script>
 <script>
