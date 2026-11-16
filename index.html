@@ -288,7 +288,7 @@
     width:100%;
     padding:10px 30px 12px;
     display:grid;
-    grid-template-columns:minmax(0,1fr) minmax(220px,280px);
+    grid-template-columns:minmax(0,1fr) max-content;
     gap:20px;
     align-items:start;
   }
@@ -337,9 +337,8 @@
     gap:28px;
     width:max-content;
     max-width:100%;
-    padding:15px 30px;
+    padding:17px 34px;
     border-radius:999px;
-    overflow:hidden;
     isolation:isolate;
   }
   .navlinks a{
@@ -352,42 +351,28 @@
   }
   .navlinks a:hover{color:#000000;opacity:.7}
 
-  /* GlassSurface (React Bits), ported to plain JS/CSS */
-  .glass-surface__filter{position:absolute;width:0;height:0;pointer-events:none}
-  .glass-surface--svg{
-    background:rgba(255,255,255,var(--glass-frost,.1));
-    -webkit-backdrop-filter:var(--filter-id,url(#glassNavFilter)) saturate(var(--glass-saturation,1));
-    backdrop-filter:var(--filter-id,url(#glassNavFilter)) saturate(var(--glass-saturation,1));
+  /* Liquid glass: real edge refraction (SVG displacement map) + specular rim.
+     The map and rim image are generated in JS from the pill's actual size. */
+  .lg{
+    background:rgba(255,255,255,.07);
     box-shadow:
-      0 0 2px 1px rgba(0,0,0,.15) inset,
-      0 0 10px 4px rgba(0,0,0,.10) inset,
-      0 4px 16px rgba(17,17,26,.05),
-      0 8px 24px rgba(17,17,26,.05),
-      0 16px 56px rgba(17,17,26,.05),
-      0 4px 16px rgba(17,17,26,.05) inset,
-      0 8px 24px rgba(17,17,26,.05) inset,
-      0 16px 56px rgba(17,17,26,.05) inset;
+      0 12px 32px rgba(20,16,30,.16),
+      0 3px 10px rgba(20,16,30,.10),
+      inset 0 0 0 .5px rgba(255,255,255,.35);
   }
-  .glass-surface--fallback{
-    background:rgba(255,255,255,.14);
-    -webkit-backdrop-filter:blur(12px) saturate(1.4) brightness(1.04);
-    backdrop-filter:blur(12px) saturate(1.4) brightness(1.04);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255,255,255,.85),
-      inset 0 -1px 0 0 rgba(255,255,255,.35),
-      0 0 2px 1px rgba(0,0,0,.12) inset,
-      0 0 12px 3px rgba(255,255,255,.28) inset,
-      0 4px 16px rgba(17,17,26,.06),
-      0 8px 24px rgba(17,17,26,.06);
+  .lg--svg{
+    -webkit-backdrop-filter:url(#lgFilter) saturate(1.35) brightness(1.04);
+    backdrop-filter:url(#lgFilter) saturate(1.35) brightness(1.04);
   }
-  .glass-surface__sheen,.glass-surface__rim{position:absolute;inset:0;border-radius:inherit;pointer-events:none}
-  .glass-surface__sheen{background:linear-gradient(135deg,rgba(255,255,255,.42) 0%,transparent 42%,transparent 64%,rgba(255,255,255,.18) 100%)}
-  .glass-surface__rim{
-    padding:2px;
-    background:linear-gradient(150deg,rgba(255,255,255,.7),rgba(255,255,255,.1) 45%,rgba(255,255,255,.08) 60%,rgba(255,255,255,.42));
-    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;
-    mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  /* Safari / Firefox can't run SVG filters in backdrop-filter: frosted fallback, same rim */
+  .lg--fallback{
+    -webkit-backdrop-filter:blur(10px) saturate(1.6) brightness(1.05);
+    backdrop-filter:blur(10px) saturate(1.6) brightness(1.05);
+  }
+  .lg__spec{
+    position:absolute;inset:0;z-index:0;
+    border-radius:inherit;pointer-events:none;
+    background-size:100% 100%;background-repeat:no-repeat;
   }
 
   .site-footer{
@@ -544,7 +529,7 @@
     .header-inner{grid-template-columns:1fr;padding:16px 20px 22px;gap:24px}
     .header-right{align-items:flex-start;gap:24px}
     .intro{text-align:left}
-    .navlinks{justify-content:flex-start;gap:20px}
+    .navlinks{justify-content:flex-start;gap:20px;max-width:100%}
     section{padding-left:20px;padding-right:20px}
     .gallery-section{min-height:calc(100vh - 184px)}
   }
@@ -3429,68 +3414,138 @@
 })();
 </script>
 <script>
-/* GlassSurface (React Bits) ported to vanilla JS for the nav links */
+/* Liquid glass for the nav pill.
+   Physically-motivated: a convex bezel refracts the backdrop (Snell's law, n=1.5), so the
+   background bends hard at the rim and stays clear in the middle. Three displacement passes at
+   slightly different strengths give the colour fringing; a canvas-drawn specular rim sits on top. */
 (function(){
   var nav=document.querySelector('.navlinks'); if(!nav) return;
-  var P={distortionScale:-180,redOffset:0,greenOffset:10,blueOffset:20,displace:0.5,blur:11,
-         borderWidth:0.07,brightness:50,opacity:0.93,mixBlendMode:'difference',
-         backgroundOpacity:0.1,saturation:1,xChannel:'R',yChannel:'G'};
-  var ua=navigator.userAgent, isWebkit=/Safari/.test(ua)&&!/Chrome/.test(ua), isFF=/Firefox/.test(ua);
-  var probe=document.createElement('div'); probe.style.backdropFilter='url(#glassNavFilter)';
+
+  var P={
+    bezel:0.28,   // rim width as a fraction of pill height
+    depth:0.34,   // max backdrop shift at the very edge, fraction of pill height
+    shape:0.70,   // <1 spreads the bend further into the glass
+    ior:1.5,      // refractive index
+    ca:0.05,      // chromatic aberration (per-channel scale spread)
+    soften:0.35,  // tiny blur to hide 8-bit stair-stepping in the map
+    lightX:-0.55, lightY:-0.83   // key light direction (from top-left)
+  };
+
+  var ua=navigator.userAgent;
+  var isWebkit=/Safari/.test(ua)&&!/Chrome|Chromium|Edg/.test(ua), isFF=/Firefox/.test(ua);
+  var probe=document.createElement('div'); probe.style.backdropFilter='url(#lgFilter)';
   var svgOK=!isWebkit&&!isFF&&probe.style.backdropFilter!=='';
 
-  nav.classList.add('glass-surface', svgOK?'glass-surface--svg':'glass-surface--fallback');
-  nav.style.setProperty('--glass-frost',P.backgroundOpacity);
-  nav.style.setProperty('--glass-saturation',P.saturation);
+  nav.classList.add('lg', svgOK?'lg--svg':'lg--fallback');
+  var spec=document.createElement('span'); spec.className='lg__spec'; spec.setAttribute('aria-hidden','true');
+  nav.insertBefore(spec,nav.firstChild);
 
-  if(!svgOK){
-    var sheen=document.createElement('span'); sheen.className='glass-surface__sheen'; sheen.setAttribute('aria-hidden','true');
-    var rim=document.createElement('span'); rim.className='glass-surface__rim'; rim.setAttribute('aria-hidden','true');
-    nav.insertBefore(rim,nav.firstChild); nav.insertBefore(sheen,nav.firstChild);
-    return;
+  /* ---- geometry: signed distance + outward normal for a pill (rounded rect, r = h/2) ---- */
+  function sgn(v){return v<0?-1:1}
+  function pill(px,py,w,h,o){
+    var r=h/2, x=px-w/2, y=py-h/2;
+    var qx=Math.abs(x)-(w/2-r), qy=Math.abs(y)-(h/2-r);
+    var ox=qx>0?qx:0, oy=qy>0?qy:0, out=Math.sqrt(ox*ox+oy*oy);
+    o.d=-(out+Math.min(Math.max(qx,qy),0)-r);
+    if(qx>0&&qy>0){o.nx=qx/out*sgn(x); o.ny=qy/out*sgn(y)}
+    else if(qx>qy){o.nx=sgn(x); o.ny=0}
+    else{o.nx=0; o.ny=sgn(y)}
   }
 
-  var NS='http://www.w3.org/2000/svg', id='glassNavFilter';
-  var svg=document.createElementNS(NS,'svg');
-  svg.setAttribute('class','glass-surface__filter'); svg.setAttribute('aria-hidden','true');
-  svg.innerHTML=
-    '<defs><filter id="'+id+'" color-interpolation-filters="sRGB" x="0%" y="0%" width="100%" height="100%">'+
-    '<feImage id="gnMap" x="0" y="0" width="100%" height="100%" preserveAspectRatio="none" result="map"/>'+
-    '<feDisplacementMap id="gnR" in="SourceGraphic" in2="map" result="dispRed"/>'+
-    '<feColorMatrix in="dispRed" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="red"/>'+
-    '<feDisplacementMap id="gnG" in="SourceGraphic" in2="map" result="dispGreen"/>'+
-    '<feColorMatrix in="dispGreen" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="green"/>'+
-    '<feDisplacementMap id="gnB" in="SourceGraphic" in2="map" result="dispBlue"/>'+
-    '<feColorMatrix in="dispBlue" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="blue"/>'+
-    '<feBlend in="red" in2="green" mode="screen" result="rg"/>'+
-    '<feBlend in="rg" in2="blue" mode="screen" result="output"/>'+
-    '<feGaussianBlur id="gnBlur" in="output" stdDeviation="'+P.displace+'"/>'+
-    '</filter></defs>';
-  nav.insertBefore(svg,nav.firstChild);
+  /* ---- refraction profile: convex squircle surface, Snell's law -> sideways shift ---- */
+  var LUT=(function(){
+    var N=256, bezelH=0.9, base=0.6, e=1e-3, out=new Float32Array(N+1);
+    function hgt(u){return Math.pow(1-Math.pow(1-u,4),0.25)}
+    function g(t){
+      var tt=Math.min(Math.max(t,e),1-e);
+      var dh=(hgt(Math.min(tt+e,1))-hgt(Math.max(tt-e,0)))/(2*e);
+      var ti=Math.atan(dh*bezelH), tr=Math.asin(Math.sin(ti)/P.ior);
+      return (base+bezelH*hgt(tt))*Math.tan(ti-tr);
+    }
+    var g0=g(0);
+    for(var i=0;i<=N;i++){var v=Math.min(Math.max(g(i/N)/g0,0),1); out[i]=Math.pow(v,P.shape)}
+    out[N]=0; return out;
+  })();
+  function mag(t){ if(t>=1) return 0; return LUT[(t*256)|0] }
 
-  [['gnR',P.redOffset],['gnG',P.greenOffset],['gnB',P.blueOffset]].forEach(function(c){
-    var el=svg.querySelector('#'+c[0]);
-    el.setAttribute('scale',String(P.distortionScale+c[1]));
-    el.setAttribute('xChannelSelector',P.xChannel);
-    el.setAttribute('yChannelSelector',P.yChannel);
-  });
-
-  function buildMap(){
-    var r=nav.getBoundingClientRect(), w=r.width||400, h=r.height||200, rad=h/2;
-    var edge=Math.min(w,h)*(P.borderWidth*0.5);
-    var m='<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg"><defs>'+
-      '<linearGradient id="rg" x1="100%" y1="0%" x2="0%" y2="0%"><stop offset="0%" stop-color="#0000"/><stop offset="100%" stop-color="red"/></linearGradient>'+
-      '<linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#0000"/><stop offset="100%" stop-color="blue"/></linearGradient>'+
-      '<filter id="soft" filterUnits="userSpaceOnUse" x="0" y="0" width="'+w+'" height="'+h+'" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="'+P.blur+'"/></filter></defs>'+
-      '<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="black"/>'+
-      '<rect x="0" y="0" width="'+w+'" height="'+h+'" rx="'+rad+'" fill="url(#rg)"/>'+
-      '<rect x="0" y="0" width="'+w+'" height="'+h+'" rx="'+rad+'" fill="url(#bg)" style="mix-blend-mode:'+P.mixBlendMode+'"/>'+
-      '<rect x="'+edge+'" y="'+edge+'" width="'+(w-edge*2)+'" height="'+(h-edge*2)+'" rx="'+rad+'" fill="hsl(0 0% '+P.brightness+'% / '+P.opacity+')" filter="url(#soft)"/></svg>';
-    svg.querySelector('#gnMap').setAttribute('href','data:image/svg+xml,'+encodeURIComponent(m));
+  /* ---- SVG filter (Chromium only) ---- */
+  var svg=null;
+  if(svgOK){
+    svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('aria-hidden','true');
+    svg.setAttribute('style','position:absolute;width:0;height:0;pointer-events:none');
+    svg.innerHTML=
+      '<defs><filter id="lgFilter" color-interpolation-filters="sRGB" x="0%" y="0%" width="100%" height="100%">'+
+      '<feImage id="lgMap" x="0" y="0" width="100%" height="100%" preserveAspectRatio="none" result="map"/>'+
+      '<feDisplacementMap id="lgR" in="SourceGraphic" in2="map" xChannelSelector="R" yChannelSelector="G" result="dR"/>'+
+      '<feColorMatrix in="dR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>'+
+      '<feDisplacementMap id="lgG" in="SourceGraphic" in2="map" xChannelSelector="R" yChannelSelector="G" result="dG"/>'+
+      '<feColorMatrix in="dG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>'+
+      '<feDisplacementMap id="lgB" in="SourceGraphic" in2="map" xChannelSelector="R" yChannelSelector="G" result="dB"/>'+
+      '<feColorMatrix in="dB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>'+
+      '<feBlend in="r" in2="g" mode="screen" result="rg"/>'+
+      '<feBlend in="rg" in2="b" mode="screen" result="rgb"/>'+
+      '<feGaussianBlur in="rgb" stdDeviation="'+P.soften+'"/>'+
+      '</filter></defs>';
+    document.body.appendChild(svg);
   }
-  buildMap();
-  if(window.ResizeObserver) new ResizeObserver(buildMap).observe(nav);
-  else window.addEventListener('resize',buildMap);
+
+  var lw=0, lh=0, lDpr=0;
+  function build(){
+    var r=nav.getBoundingClientRect(), w=Math.round(r.width), h=Math.round(r.height);
+    var dpr=Math.min(window.devicePixelRatio||1,3);
+    if(w<8||h<8||(w===lw&&h===lh&&dpr===lDpr)) return;
+    lw=w; lh=h; lDpr=dpr;
+    var B=h*P.bezel, maxD=h*P.depth, o={d:0,nx:0,ny:0};
+
+    /* 1) displacement map (1 css px per texel). R/G = inward shift, 128 = no shift */
+    if(svgOK){
+      var c=document.createElement('canvas'); c.width=w; c.height=h;
+      var ctx=c.getContext('2d'), img=ctx.createImageData(w,h), px=img.data, i=0;
+      for(var y=0;y<h;y++) for(var x=0;x<w;x++,i+=4){
+        pill(x+.5,y+.5,w,h,o);
+        var m=o.d>0?mag(o.d/B):0;
+        px[i]  =Math.round(127.5-o.nx*m*127.5);   // inward = -normal
+        px[i+1]=Math.round(127.5-o.ny*m*127.5);
+        px[i+2]=128; px[i+3]=255;
+      }
+      ctx.putImageData(img,0,0);
+      svg.querySelector('#lgMap').setAttribute('href',c.toDataURL('image/png'));
+      var S=2*maxD;                                // map range is +-maxD
+      svg.querySelector('#lgR').setAttribute('scale',String(S*(1+P.ca)));
+      svg.querySelector('#lgG').setAttribute('scale',String(S));
+      svg.querySelector('#lgB').setAttribute('scale',String(S*(1-P.ca)));
+    }
+
+    /* 2) specular rim + soft inner shade, drawn at device resolution so the edge stays crisp */
+    var cw=Math.round(w*dpr), ch=Math.round(h*dpr);
+    var c2=document.createElement('canvas'); c2.width=cw; c2.height=ch;
+    var x2=c2.getContext('2d'), im2=x2.createImageData(cw,ch), q=im2.data, j=0;
+    var L=Math.hypot(P.lightX,P.lightY), lx=P.lightX/L, ly=P.lightY/L;
+    for(var yy=0;yy<ch;yy++) for(var xx=0;xx<cw;xx++,j+=4){
+      pill((xx+.5)/dpr,(yy+.5)/dpr,w,h,o);
+      if(o.d<=0) continue;
+      var dot=o.nx*lx+o.ny*ly;
+      var s=Math.pow(Math.max(dot,0),1.4)+0.65*Math.pow(Math.max(-dot,0),1.4);
+      var edge=Math.exp(-o.d/1.5), soft=Math.exp(-o.d/(B*0.55));
+      var aw=Math.min(edge*s*0.95+soft*s*0.22,1);                 // white highlight
+      var ad=Math.min((1-Math.min(s,1))*soft*0.14,1);             // faint dark shade on the unlit side
+      var a=aw+ad*(1-aw);
+      if(a<=0) continue;
+      var cov=Math.min(o.d*dpr+.5,1);                              // 1px edge antialiasing
+      q[j]  =(255*aw+20*ad*(1-aw))/a;
+      q[j+1]=q[j];
+      q[j+2]=(255*aw+30*ad*(1-aw))/a;
+      q[j+3]=a*cov*255;
+    }
+    x2.putImageData(im2,0,0);
+    spec.style.backgroundImage='url('+c2.toDataURL('image/png')+')';
+  }
+
+  build();
+  if(window.ResizeObserver) new ResizeObserver(build).observe(nav);
+  window.addEventListener('resize',build);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(build);
 })();
 </script>
 </body>
