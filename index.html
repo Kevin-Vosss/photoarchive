@@ -892,6 +892,15 @@
   }
 </style>
 <style>
+  /* ===== hover pill: centred on the link ===== */
+  .lg>.lg__ind{inset:auto;top:50%;left:0;bottom:auto;right:auto}
+
+  /* ===== cursor: true white (no difference-blend inversion) ===== */
+  .blob-cursor-container{
+    mix-blend-mode:normal;
+    filter:drop-shadow(0 2px 6px rgba(60,80,160,.35));
+  }
+
   /* ===== CD-marker (sharpie-on-disc) index labels ===== */
   .section-label,.section-count{
     font-family:'CD Writing','Space Mono',monospace;
@@ -3733,9 +3742,9 @@
 
   var seen=false;
   function place(a){
-    ind.style.setProperty('--ix',(a.offsetLeft-18)+'px');
-    ind.style.setProperty('--iw',(a.offsetWidth+30)+'px');
-    if(cd) cd.style.setProperty('--cx',(a.offsetLeft-15)+'px');
+    ind.style.setProperty('--ix',(a.offsetLeft-14)+'px');
+    ind.style.setProperty('--iw',(a.offsetWidth+28)+'px');
+    if(cd) cd.style.setProperty('--cx',(a.offsetLeft-20)+'px');
     nav.classList.add('is-ind');
     if(!seen){ requestAnimationFrame(function(){ requestAnimationFrame(function(){ nav.classList.add('is-seen'); }); }); seen=true; }
   }
