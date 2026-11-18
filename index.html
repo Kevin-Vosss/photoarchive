@@ -964,6 +964,12 @@
   .navlinks.lg.is-ind a:hover,.navlinks.lg.is-ind a:focus-visible{opacity:1}
   @media(prefers-reduced-motion:reduce){.lg__grain{animation:none}}
 </style>
+<style>
+  /* smooth liquid reflections: no noise texture, set by script as one seamless strip */
+  .lg__grain{background:none;mix-blend-mode:normal;opacity:var(--lg-o);animation:lgFlow 45s linear infinite}
+  @keyframes lgFlow{to{background-position:1200px 0}}
+  @media(prefers-reduced-motion:reduce){.lg__grain{animation:none}}
+</style>
 </head>
 <body>
 <div id="introScreen" class="intro-screen" role="dialog" aria-modal="true" aria-label="Entry">
@@ -3817,6 +3823,24 @@
   }
 
   build();
+  (function(){
+    var gr=nav.querySelector('.lg__grain'); if(!gr) return;
+    var dpr=Math.min(window.devicePixelRatio||1,2), cw=Math.round(1200*dpr), ch=Math.round(100*dpr), T=Math.PI*2;
+    var c=document.createElement('canvas'); c.width=cw; c.height=ch;
+    var x=c.getContext('2d'), im=x.createImageData(cw,ch), d=im.data, i=0;
+    for(var y=0;y<ch;y++) for(var xx=0;xx<cw;xx++,i+=4){
+      var u=xx/cw, v=y/ch;
+      var w=v*3+.55*Math.sin(T*u*2+v*3)+.30*Math.sin(T*u*3-v*2+1.3)+.18*Math.sin(T*u*5+v*4+.7);
+      var sv=Math.sin(w*Math.PI*1.1);
+      var env=1-.65*Math.exp(-Math.pow((v-.5)/.2,2));
+      if(sv>0){ d[i]=d[i+1]=d[i+2]=255; d[i+3]=Math.pow(sv,5)*.6*env*255; }
+      else    { d[i]=d[i+1]=d[i+2]=0;   d[i+3]=Math.pow(-sv,1.5)*.4*env*255; }
+    }
+    x.putImageData(im,0,0);
+    gr.style.backgroundImage='url('+c.toDataURL('image/png')+')';
+    gr.style.backgroundSize='1200px 100%';
+    gr.style.backgroundRepeat='repeat-x';
+  })();
   if(window.ResizeObserver) new ResizeObserver(build).observe(nav);
   window.addEventListener('resize',build);
   if(document.fonts&&document.fonts.ready) document.fonts.ready.then(build);
