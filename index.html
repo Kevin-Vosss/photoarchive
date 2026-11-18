@@ -928,6 +928,42 @@
   .lg__ring{opacity:var(--lg-o);box-shadow:inset 0 0 0 .6px rgba(255,255,255,.75),inset 0 2px 2px -1px rgba(255,255,255,1),inset 0 -2px 3px -1px rgba(255,255,255,.55),inset 0 0 14px rgba(255,255,255,.2)}
   .lg__grain{opacity:calc(.14*var(--lg-o))}
 </style>
+<style>
+  /* ===== smoked black liquid glass: deep blacks, hard speculars, thick bevel ===== */
+  .lg--svg .lg__glass{-webkit-backdrop-filter:url(#lgFilter) blur(1.6px) saturate(1.25) brightness(.42) contrast(1.45);backdrop-filter:url(#lgFilter) blur(1.6px) saturate(1.25) brightness(.42) contrast(1.45)}
+  .lg--fallback .lg__glass{-webkit-backdrop-filter:blur(6px) saturate(1.2) brightness(.45) contrast(1.4);backdrop-filter:blur(6px) saturate(1.2) brightness(.45) contrast(1.4)}
+  .lg__glass{
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.04) 30%,rgba(0,0,0,0) 55%,rgba(255,255,255,.16) 100%),
+      radial-gradient(120% 160% at 12% -20%,rgba(255,255,255,.35),rgba(255,255,255,0) 50%),
+      linear-gradient(180deg,rgba(6,8,14,.72),rgba(0,0,0,.82));
+    box-shadow:
+      0 34px 54px -14px rgba(0,0,0,.6),
+      0 14px 24px -8px rgba(0,0,0,.45),
+      0 2px 3px rgba(0,0,0,.5),
+      inset 0 0 0 1px rgba(255,255,255,.55),
+      inset 0 3px 2px -1px rgba(255,255,255,.95),
+      inset 0 -3px 3px -1px rgba(0,0,0,.9),
+      inset 0 0 0 5px rgba(0,0,0,.35),
+      inset 0 0 0 6px rgba(255,255,255,.14),
+      inset 0 0 26px rgba(255,255,255,.12)}
+  .lg__ring{opacity:var(--lg-o);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(255,255,255,.35),inset 0 0 12px rgba(255,255,255,.12)}
+  .lg__ring::after{border:1px solid rgba(255,255,255,.28);border-bottom-color:rgba(255,255,255,.08);inset:5px}
+  /* flowing liquid reflections */
+  .lg__grain{
+    opacity:calc(.5*var(--lg-o));mix-blend-mode:screen;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='150' viewBox='0 0 600 150'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.006 .05' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  10 0 0 0 -4.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E") 0 0/600px 100%,url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='150' viewBox='0 0 600 150'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.006 .05' numOctaves='3' seed='23' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  10 0 0 0 -4.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E") 0 0/340px 100%;
+    animation:lgFlow 30s linear infinite}
+  @keyframes lgFlow{to{background-position:600px 0,-340px 0}}
+  .lg__glow{mix-blend-mode:screen;background:radial-gradient(circle 70px at var(--mx,50%) var(--my,50%),rgba(255,255,255,.4),rgba(255,255,255,.08) 55%,rgba(255,255,255,0))}
+  .lg__sheen{mix-blend-mode:screen}
+  .lg__sheen::before{mix-blend-mode:screen;opacity:.0}
+  /* labels on black */
+  .navlinks.lg a,.navlinks.lg a:hover{color:rgb(255 255 255 / var(--lg-o));text-shadow:0 1px 2px rgba(0,0,0,.7)}
+  .navlinks.lg.is-ind a{opacity:.72}
+  .navlinks.lg.is-ind a:hover,.navlinks.lg.is-ind a:focus-visible{opacity:1}
+  @media(prefers-reduced-motion:reduce){.lg__grain{animation:none}}
+</style>
 </head>
 <body>
 <div id="introScreen" class="intro-screen" role="dialog" aria-modal="true" aria-label="Entry">
